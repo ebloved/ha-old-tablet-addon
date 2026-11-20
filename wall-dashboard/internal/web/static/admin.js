@@ -230,6 +230,29 @@
       tile.appendChild(cn);
       tile.appendChild(cv);
       tile.appendChild(cd);
+    } else if (w.type === 'weather') {
+      var winfo = entityInfo(w.entity);
+      var wn = document.createElement('div');
+      wn.className = 'name';
+      wn.textContent = autoName(w);
+      var wv = document.createElement('div');
+      wv.className = 'value';
+      wv.textContent = winfo ? winfo.state : '—';
+      var ws = document.createElement('div');
+      ws.className = 'sub';
+      ws.textContent = 'погода';
+      tile.appendChild(wn);
+      tile.appendChild(wv);
+      tile.appendChild(ws);
+    } else if (w.type === 'alerts') {
+      var an = document.createElement('div');
+      an.className = 'name';
+      an.textContent = w.name || 'Алерты';
+      var ap = document.createElement('div');
+      ap.className = 'alerts-prev';
+      ap.textContent = 'алерты из Home Assistant';
+      tile.appendChild(an);
+      tile.appendChild(ap);
     } else if (w.type === 'rss') {
       var rn = document.createElement('div');
       rn.className = 'name';
@@ -411,6 +434,7 @@
       return;
     }
     $('e-entity').disabled = w.type === 'rss' || w.type === 'clock';
+    $('e-entity').placeholder = w.type === 'alerts' ? 'необязательно: sensor.alerts' : 'light.kitchen';
     $('e-feed').disabled = w.type !== 'rss';
     $('e-limit').disabled = w.type !== 'rss';
   }

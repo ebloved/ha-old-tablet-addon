@@ -75,6 +75,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/events", s.auth(s.events))
 	mux.HandleFunc("POST /api/action", s.auth(s.action))
 	mux.HandleFunc("GET /api/rss", s.auth(s.feed))
+	mux.HandleFunc("GET /api/alerts", s.auth(s.alerts))
 
 	if s.ingress {
 		mux.HandleFunc("GET /admin", s.adminPage)

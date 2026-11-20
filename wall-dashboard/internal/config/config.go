@@ -15,10 +15,12 @@ import (
 var entityRe = regexp.MustCompile(`^[a-z0-9_]+\.[a-z0-9_]+$`)
 
 var allowedTypes = map[string]bool{
-	"entity": true,
-	"sensor": true,
-	"clock":  true,
-	"rss":    true,
+	"entity":  true,
+	"sensor":  true,
+	"clock":   true,
+	"rss":     true,
+	"weather": true,
+	"alerts":  true,
 }
 
 type Widget struct {
@@ -242,7 +244,7 @@ func sanitize(in Config, token string) Config {
 		if !allowedTypes[w.Type] {
 			continue
 		}
-		if w.Type == "entity" || w.Type == "sensor" {
+		if w.Type == "entity" || w.Type == "sensor" || w.Type == "weather" || w.Type == "alerts" {
 			if w.Entity != "" && !entityRe.MatchString(w.Entity) {
 				continue
 			}

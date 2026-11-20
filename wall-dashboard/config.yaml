@@ -1,5 +1,5 @@
 name: Old Tablet Dashboard
-version: "0.3.0"
+version: "0.4.0"
 slug: old_tablet_dashboard
 description: Lightweight Home Assistant dashboard for old tablets (iOS 12 / Safari 12)
 url: https://github.com/ebloved/ha-old-tablet-addon/tree/main/wall-dashboard

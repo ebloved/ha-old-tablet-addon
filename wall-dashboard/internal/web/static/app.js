@@ -5,6 +5,24 @@
 
   var ACTION_DOMAINS = { script: true, scene: true, button: true, input_button: true };
 
+  var CONDITIONS = {
+    'clear-night': '🌙 Ясно',
+    sunny: '☀️ Солнечно',
+    partlycloudy: '⛅ Переменная облачность',
+    cloudy: '☁️ Облачно',
+    rainy: '🌧️ Дождь',
+    pouring: '🌧️ Ливень',
+    snowy: '❄️ Снег',
+    'snowy-rainy': '🌨️ Снег с дождём',
+    fog: '🌫️ Туман',
+    hail: '🌨️ Град',
+    lightning: '⚡ Гроза',
+    'lightning-rainy': '⛈️ Гроза с дождём',
+    windy: '💨 Ветрено',
+    'windy-variant': '💨 Ветрено',
+    exceptional: '⚠️ Аномалия'
+  };
+
   var token = '';
   try {
     token = localStorage.getItem(TOKEN_KEY) || '';
@@ -140,6 +158,32 @@
       return node;
     }
 
+    if (w.type === 'weather') {
+      var wn = document.createElement('div');
+      wn.className = 'name';
+      wn.textContent = friendly(w);
+      var wv = document.createElement('div');
+      wv.className = 'value';
+      wv.textContent = '—';
+      var ws = document.createElement('div');
+      ws.className = 'sub';
+      node.appendChild(wn);
+      node.appendChild(wv);
+      node.appendChild(ws);
+      return node;
+    }
+
+    if (w.type === 'alerts') {
+      var an = document.createElement('div');
+      an.className = 'name';
+      an.textContent = w.name || 'Алерты';
+      var abox = document.createElement('div');
+      abox.className = 'alerts';
+      node.appendChild(an);
+      node.appendChild(abox);
+      return node;
+    }
+
     if (w.type === 'rss') {
       var rh = document.createElement('div');
       rh.className = 'name';
@@ -191,6 +235,24 @@
       if (subEl) {
         subEl.textContent = 'нет данных';
       }
+      return;
+    }
+
+    if (w.type === 'weather') {
+      var a = st.attributes || {};
+      var temp = a.temperature;
+      valueEl.textContent = temp != null ? Math.round(temp) + '°' : '—';
+      var parts = [CONDITIONS[st.state] || st.state];
+      if (a.humidity != null) {
+        parts.push(a.humidity + '%');
+      }
+      if (a.wind_speed != null) {
+        parts.push(a.wind_speed + ' ' + (a.wind_speed_unit || ''));
+      }
+      if (subEl) {
+        subEl.textContent = parts.join(' · ');
+      }
+      node.classList.remove('active');
       return;
     }
 
@@ -288,8 +350,60 @@
       });
   }
 
-  function loadStates() {
-    return api('api/state')
+  function loadAlerts() {
+    for (var i = 0; i < tiles.length; i++) {
+      if (tiles[i].w.type === 'alerts') {
+        fetchAlerts(tiles[i]);
+      }
+    }
+  }
+
+  function fetchAlerts(t) {
+    api('api/alerts?id=' + encodeURIComponent(t.w.id))
+      .then(function (r) {
+        return r.ok ? r.json() : null;
+      })
+      .then(function (d) {
+        if (d) {
+          renderAlerts(t.node, d);
+        }
+      })
+      .catch(function () {});
+  }
+
+  function alertRow(text, level) {
+    var row = document.createElement('div');
+    row.className = 'alert-item';
+    var dot = document.createElement('span');
+    dot.className = 'alert-dot ' + level;
+    var txt = document.createElement('span');
+    txt.className = 'alert-text';
+    txt.textContent = text;
+    row.appendChild(dot);
+    row.appendChild(txt);
+    return row;
+  }
+
+  function renderAlerts(node, d) {
+    var box = node.querySelector('.alerts');
+    if (!box) {
+      return;
+    }
+    box.innerHTML = '';
+    var items = d.items || [];
+    if (!items.length) {
+      box.appendChild(alertRow('Всё спокойно', 'ok'));
+      return;
+    }
+    for (var i = 0; i < items.length; i++) {
+      box.appendChild(alertRow(items[i].text, items[i].level || 'warn'));
+    }
+    if (d.more) {
+      box.appendChild(alertRow('+ ещё ' + d.more, 'more'));
+    }
+  }
+
+  function loadStates() {    return api('api/state')
       .then(function (r) {
         return r.ok ? r.json() : {};
       })
@@ -323,6 +437,7 @@
         document.body.className = 'theme-' + (c.theme === 'light' ? 'light' : 'dark');
         grid.style.setProperty('--cols', c.columns || 6);
         render();
+        loadAlerts();
         return loadStates().then(function () {
           return true;
         });
@@ -498,7 +613,10 @@
     if (!document.hidden && cfg && Date.now() - lastEvent > 60000) {
       connect();
       loadStates();
+      loadAlerts();
       lastEvent = Date.now();
     }
   });
+
+  setInterval(loadAlerts, 30000);
 })();

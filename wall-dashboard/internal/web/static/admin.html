@@ -79,12 +79,15 @@
   .canvas .value { font-size:26px; line-height:1.1; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .canvas .sub { font-size:11px; color:var(--t-muted); min-height:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .canvas .t-clock .value { font-size:32px; }
+  .canvas .t-weather .value { font-size:34px; }
   .canvas .t-sensor .value { font-size:23px; }
   .canvas .t-rss { justify-content:flex-start; }
   .canvas .rss-prev { margin-top:8px; }
   .canvas .rss-line { height:9px; border-radius:4px; background:var(--t-border); margin-bottom:7px; }
   .canvas .rss-line:nth-child(2) { width:86%; }
   .canvas .rss-line:nth-child(3) { width:64%; }
+  .canvas .t-alerts { justify-content:flex-start; }
+  .canvas .alerts-prev { margin-top:8px; font-size:12px; color:var(--t-muted); }
   .canvas .empty { grid-column:1 / -1; color:var(--t-muted); font-size:13px; padding:12px; }
   .resize { position:absolute; right:0; bottom:0; width:22px; height:22px; cursor:nwse-resize; touch-action:none; display:none; }
   .canvas .tile.selected .resize { display:block; }
@@ -163,6 +166,8 @@
               <option value="sensor">sensor</option>
               <option value="clock">clock</option>
               <option value="rss">rss</option>
+              <option value="weather">weather</option>
+              <option value="alerts">alerts</option>
             </select>
           </label>
           <label>Сущность
