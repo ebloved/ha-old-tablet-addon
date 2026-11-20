@@ -253,6 +253,11 @@
       ap.textContent = 'алерты из Home Assistant';
       tile.appendChild(an);
       tile.appendChild(ap);
+    } else if (w.type === 'camera') {
+      var cp = document.createElement('div');
+      cp.className = 'cam-prev';
+      cp.textContent = (w.name || w.entity || 'камера') + ' · снимок ' + (w.interval || 3) + ' с';
+      tile.appendChild(cp);
     } else if (w.type === 'rss') {
       var rn = document.createElement('div');
       rn.className = 'name';
@@ -416,6 +421,7 @@
     setVal('e-name', w.name || '');
     setVal('e-feed', w.feed || '');
     setVal('e-limit', w.limit || 8);
+    setVal('e-interval', w.interval || 3);
     setVal('e-w', w.w || 1);
     setVal('e-h', w.h || 1);
     applyFieldState();
@@ -437,6 +443,7 @@
     $('e-entity').placeholder = w.type === 'alerts' ? 'необязательно: sensor.alerts' : 'light.kitchen';
     $('e-feed').disabled = w.type !== 'rss';
     $('e-limit').disabled = w.type !== 'rss';
+    $('e-interval').disabled = w.type !== 'camera';
   }
 
   function startResize(ev, i) {
@@ -516,7 +523,7 @@
   }
 
   function addWidget() {
-    cfg.widgets.push({ id: '', type: 'entity', entity: '', name: '', w: 2, h: 1 });
+    cfg.widgets.push({ id: '', type: 'entity', entity: '', name: '', interval: 3, w: 2, h: 1 });
     selected = cfg.widgets.length - 1;
     markDirty();
     renderAll();
@@ -712,6 +719,17 @@
     w.limit = clamp(parseInt(this.value, 10) || 8, 3, 30);
     this.value = w.limit;
     markDirty();
+  });
+
+  $('e-interval').addEventListener('change', function () {
+    var w = cfg.widgets[selected];
+    if (!w) {
+      return;
+    }
+    w.interval = clamp(parseInt(this.value, 10) || 3, 2, 30);
+    this.value = w.interval;
+    markDirty();
+    rerenderCanvas();
   });
 
   $('e-w').addEventListener('change', function () {

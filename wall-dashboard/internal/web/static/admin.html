@@ -88,6 +88,8 @@
   .canvas .rss-line:nth-child(3) { width:64%; }
   .canvas .t-alerts { justify-content:flex-start; }
   .canvas .alerts-prev { margin-top:8px; font-size:12px; color:var(--t-muted); }
+  .canvas .t-camera { padding:0; background:#000; position:relative; }
+  .canvas .cam-prev { position:absolute; left:0; top:0; right:0; bottom:0; display:flex; align-items:center; justify-content:center; color:var(--t-muted); font-size:12px; }
   .canvas .empty { grid-column:1 / -1; color:var(--t-muted); font-size:13px; padding:12px; }
   .resize { position:absolute; right:0; bottom:0; width:22px; height:22px; cursor:nwse-resize; touch-action:none; display:none; }
   .canvas .tile.selected .resize { display:block; }
@@ -168,6 +170,7 @@
               <option value="rss">rss</option>
               <option value="weather">weather</option>
               <option value="alerts">alerts</option>
+              <option value="camera">camera</option>
             </select>
           </label>
           <label>Сущность
@@ -181,6 +184,9 @@
           </label>
           <label>Записей
             <input id="e-limit" type="number" min="3" max="30">
+          </label>
+          <label>Интервал, с
+            <input id="e-interval" type="number" min="2" max="30">
           </label>
           <div class="two">
             <label>Ширина

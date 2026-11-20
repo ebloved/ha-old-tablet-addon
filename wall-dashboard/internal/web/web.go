@@ -13,6 +13,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/skip2/go-qrcode"
@@ -31,10 +32,20 @@ type Server struct {
 	rss     *rss.Cache
 	log     *slog.Logger
 	ingress bool
+
+	camMu sync.Mutex
+	cam   map[string]cachedCamera
 }
 
 func New(cfg *config.Store, hac *ha.Client, rc *rss.Cache, log *slog.Logger, ingress bool) *Server {
-	return &Server{cfg: cfg, ha: hac, rss: rc, log: log, ingress: ingress}
+	return &Server{
+		cfg:     cfg,
+		ha:      hac,
+		rss:     rc,
+		log:     log,
+		ingress: ingress,
+		cam:     make(map[string]cachedCamera),
+	}
 }
 
 func (s *Server) Handler() http.Handler {
@@ -76,6 +87,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/action", s.auth(s.action))
 	mux.HandleFunc("GET /api/rss", s.auth(s.feed))
 	mux.HandleFunc("GET /api/alerts", s.auth(s.alerts))
+	mux.HandleFunc("GET /api/camera", s.auth(s.camera))
 
 	if s.ingress {
 		mux.HandleFunc("GET /admin", s.adminPage)

@@ -21,17 +21,19 @@ var allowedTypes = map[string]bool{
 	"rss":     true,
 	"weather": true,
 	"alerts":  true,
+	"camera":  true,
 }
 
 type Widget struct {
-	ID     string `json:"id"`
-	Type   string `json:"type"`
-	Entity string `json:"entity,omitempty"`
-	Name   string `json:"name,omitempty"`
-	Feed   string `json:"feed,omitempty"`
-	Limit  int    `json:"limit,omitempty"`
-	W      int    `json:"w,omitempty"`
-	H      int    `json:"h,omitempty"`
+	ID       string `json:"id"`
+	Type     string `json:"type"`
+	Entity   string `json:"entity,omitempty"`
+	Name     string `json:"name,omitempty"`
+	Feed     string `json:"feed,omitempty"`
+	Limit    int    `json:"limit,omitempty"`
+	Interval int    `json:"interval,omitempty"`
+	W        int    `json:"w,omitempty"`
+	H        int    `json:"h,omitempty"`
 }
 
 type Config struct {
@@ -247,6 +249,17 @@ func sanitize(in Config, token string) Config {
 		if w.Type == "entity" || w.Type == "sensor" || w.Type == "weather" || w.Type == "alerts" {
 			if w.Entity != "" && !entityRe.MatchString(w.Entity) {
 				continue
+			}
+		}
+		if w.Type == "camera" {
+			if w.Entity != "" && (!entityRe.MatchString(w.Entity) || !strings.HasPrefix(w.Entity, "camera.")) {
+				continue
+			}
+			if w.Interval < 2 {
+				w.Interval = 3
+			}
+			if w.Interval > 30 {
+				w.Interval = 30
 			}
 		}
 		if w.Type == "rss" {

@@ -51,6 +51,7 @@
   var lastEvent = Date.now();
   var reloading = false;
   var noTokenShown = false;
+  var camTimers = [];
 
   function api(path, opts) {
     opts = opts || {};
@@ -184,6 +185,22 @@
       return node;
     }
 
+    if (w.type === 'camera') {
+      var img = document.createElement('img');
+      img.className = 'cam';
+      img.alt = '';
+      var camName = document.createElement('div');
+      camName.className = 'cam-name';
+      camName.textContent = friendly(w);
+      node.appendChild(img);
+      node.appendChild(camName);
+      startCamera(node, w);
+      node.addEventListener('click', function () {
+        node.classList.toggle('cam-full');
+      });
+      return node;
+    }
+
     if (w.type === 'rss') {
       var rh = document.createElement('div');
       rh.className = 'name';
@@ -222,12 +239,12 @@
   function paint(node, w, st) {
     var valueEl = node.querySelector('.value');
     var subEl = node.querySelector('.sub');
-    var nameEl = node.querySelector('.name');
-    if (!valueEl) {
-      return;
-    }
+    var nameEl = node.querySelector('.name') || node.querySelector('.cam-name');
     if (nameEl && !w.name) {
       nameEl.textContent = friendly(w);
+    }
+    if (!valueEl) {
+      return;
     }
     if (!st) {
       valueEl.textContent = '—';
@@ -307,6 +324,10 @@
   }
 
   function render() {
+    for (var c = 0; c < camTimers.length; c++) {
+      clearInterval(camTimers[c]);
+    }
+    camTimers = [];
     grid.innerHTML = '';
     tiles = [];
     var ws = cfg.widgets || [];
@@ -480,6 +501,34 @@
         loadConfig();
       }
     };
+  }
+
+  function startCamera(node, w) {
+    var img = node.querySelector('.cam');
+    if (!img) {
+      return;
+    }
+    var interval = Math.max(2, w.interval || 3) * 1000;
+
+    function refresh() {
+      if (document.hidden) {
+        return;
+      }
+      var loader = new Image();
+      loader.onload = function () {
+        img.src = loader.src;
+      };
+      loader.src =
+        'api/camera?id=' +
+        encodeURIComponent(w.id) +
+        '&t=' +
+        encodeURIComponent(token) +
+        '&v=' +
+        Date.now();
+    }
+
+    refresh();
+    camTimers.push(setInterval(refresh, interval));
   }
 
   function startClock(node) {
