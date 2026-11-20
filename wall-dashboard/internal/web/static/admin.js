@@ -66,6 +66,7 @@
           $('host').value = location.hostname || 'homeassistant.local';
         }
         fillDevices();
+        fillEntityList();
         syncToolbar();
         renderStatus(res[1]);
         renderTablet();
@@ -74,6 +75,17 @@
       .catch(function (e) {
         $('ha-status').textContent = 'ошибка: ' + e.message;
       });
+  }
+
+  function fillEntityList() {
+    var dl = $('entity-list');
+    dl.innerHTML = '';
+    for (var i = 0; i < states.length; i++) {
+      var o = document.createElement('option');
+      o.value = states[i].entity_id;
+      o.label = states[i].name + ' — ' + states[i].state;
+      dl.appendChild(o);
+    }
   }
 
   function fillDevices() {
