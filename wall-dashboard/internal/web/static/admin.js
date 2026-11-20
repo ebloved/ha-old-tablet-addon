@@ -105,7 +105,23 @@
     $('device').value = cfg.device;
     $('columns').value = cfg.columns;
     $('theme').value = cfg.theme;
+    $('theme-mode').value = cfg.theme_mode || 'manual';
+    $('theme-entity').value = cfg.theme_entity || '';
+    $('theme-dark-state').value = cfg.theme_dark_state || 'on';
+    $('theme-dark-from').value = cfg.theme_dark_from || '21:00';
+    $('theme-light-from').value = cfg.theme_light_from || '07:00';
     $('title').value = cfg.title || '';
+    renderThemeControls();
+  }
+
+  function renderThemeControls() {
+    var mode = cfg.theme_mode || 'manual';
+    $('theme-color-wrap').hidden = mode !== 'manual';
+    $('tm-entity-wrap').hidden = mode !== 'entity';
+    $('tm-state-wrap').hidden = mode !== 'entity';
+    $('tm-dark-wrap').hidden = mode !== 'time';
+    $('tm-light-wrap').hidden = mode !== 'time';
+    $('theme-extra').hidden = mode === 'manual' || mode === 'sun';
   }
 
   function renderStatus(st) {
@@ -172,8 +188,54 @@
     );
   }
 
+  function parseHM(s) {
+    var m = /^([01][0-9]|2[0-3]):([0-5][0-9])$/.exec(String(s || ''));
+    if (!m) {
+      return null;
+    }
+    return parseInt(m[1], 10) * 60 + parseInt(m[2], 10);
+  }
+
+  function timeIsDark(c) {
+    var now = new Date();
+    var mins = now.getHours() * 60 + now.getMinutes();
+    var d = parseHM(c.theme_dark_from);
+    var l = parseHM(c.theme_light_from);
+    if (d === null) {
+      d = 21 * 60;
+    }
+    if (l === null) {
+      l = 7 * 60;
+    }
+    if (d === l) {
+      return false;
+    }
+    if (d < l) {
+      return mins >= d && mins < l;
+    }
+    return mins >= d || mins < l;
+  }
+
+  function effectiveTheme(c) {
+    if (c.theme_mode === 'sun') {
+      var sun = entityInfo('sun.sun');
+      if (sun) {
+        return sun.state === 'below_horizon' ? 'dark' : 'light';
+      }
+    } else if (c.theme_mode === 'entity') {
+      var e = entityInfo(c.theme_entity);
+      if (e) {
+        var dark = String(e.state).toLowerCase() === String(c.theme_dark_state || 'on').toLowerCase();
+        return dark ? 'dark' : 'light';
+      }
+    } else if (c.theme_mode === 'time') {
+      return timeIsDark(c) ? 'dark' : 'light';
+    }
+    return c.theme === 'light' ? 'light' : 'dark';
+  }
+
   function applyCanvasTheme() {
-    $('canvas').className = 'canvas theme-' + (cfg.theme === 'light' ? 'light' : 'dark');
+    $('canvas').className = 'canvas theme-' + effectiveTheme(cfg);
     $('canvas').style.setProperty('--tracks', cfg.columns * 2);
   }
 
@@ -680,6 +742,11 @@
     var body = {
       title: cfg.title || '',
       theme: cfg.theme,
+      theme_mode: cfg.theme_mode || 'manual',
+      theme_entity: cfg.theme_entity || '',
+      theme_dark_state: cfg.theme_dark_state || 'on',
+      theme_dark_from: cfg.theme_dark_from || '21:00',
+      theme_light_from: cfg.theme_light_from || '07:00',
       columns: cfg.columns,
       device: cfg.device,
       layout_version: 2,
@@ -820,6 +887,37 @@
     applyCanvasTheme();
   });
 
+  $('theme-mode').addEventListener('change', function () {
+    cfg.theme_mode = this.value;
+    markDirty();
+    renderThemeControls();
+    applyCanvasTheme();
+  });
+
+  $('theme-entity').addEventListener('change', function () {
+    cfg.theme_entity = this.value.trim();
+    markDirty();
+    applyCanvasTheme();
+  });
+
+  $('theme-dark-state').addEventListener('change', function () {
+    cfg.theme_dark_state = this.value.trim() || 'on';
+    markDirty();
+    applyCanvasTheme();
+  });
+
+  $('theme-dark-from').addEventListener('change', function () {
+    cfg.theme_dark_from = this.value || '21:00';
+    markDirty();
+    applyCanvasTheme();
+  });
+
+  $('theme-light-from').addEventListener('change', function () {
+    cfg.theme_light_from = this.value || '07:00';
+    markDirty();
+    applyCanvasTheme();
+  });
+
   $('title').addEventListener('input', function () {
     cfg.title = this.value;
     markDirty();
@@ -936,6 +1034,12 @@
   });
 
   setInterval(tickClocks, 15000);
+  setInterval(function () {
+    if (cfg && cfg.theme_mode === 'time') {
+      applyCanvasTheme();
+    }
+  }, 60000);
+
   setInterval(function () {
     req('GET', 'api/admin/status').then(renderStatus).catch(function () {});
   }, 10000);

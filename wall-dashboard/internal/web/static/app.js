@@ -64,6 +64,44 @@
     return n < 10 ? '0' + n : '' + n;
   }
 
+  function parseHM(s) {
+    var m = /^([01][0-9]|2[0-3]):([0-5][0-9])$/.exec(String(s || ''));
+    if (!m) {
+      return null;
+    }
+    return parseInt(m[1], 10) * 60 + parseInt(m[2], 10);
+  }
+
+  function timeIsDark(c) {
+    var now = new Date();
+    var mins = now.getHours() * 60 + now.getMinutes();
+    var d = parseHM(c.theme_dark_from);
+    var l = parseHM(c.theme_light_from);
+    if (d === null) {
+      d = 21 * 60;
+    }
+    if (l === null) {
+      l = 7 * 60;
+    }
+    if (d === l) {
+      return false;
+    }
+    if (d < l) {
+      return mins >= d && mins < l;
+    }
+    return mins >= d || mins < l;
+  }
+
+  function effectiveTheme(c) {
+    if (!c) {
+      return 'dark';
+    }
+    if (c.theme_mode === 'time') {
+      return timeIsDark(c) ? 'dark' : 'light';
+    }
+    return c.theme === 'light' ? 'light' : 'dark';
+  }
+
   function relTime(iso) {
     if (!iso) {
       return '';
@@ -471,7 +509,7 @@
       .then(function (c) {
         cfg = c;
         document.title = c.title || 'Home';
-        document.body.className = 'theme-' + (c.theme === 'light' ? 'light' : 'dark');
+        document.body.className = 'theme-' + effectiveTheme(c);
         grid.style.setProperty('--tracks', (c.columns || 6) * 2);
         render();
         loadAlerts();
@@ -684,4 +722,9 @@
   });
 
   setInterval(loadAlerts, 30000);
+  setInterval(function () {
+    if (cfg && cfg.theme_mode === 'time') {
+      document.body.className = 'theme-' + effectiveTheme(cfg);
+    }
+  }, 60000);
 })();

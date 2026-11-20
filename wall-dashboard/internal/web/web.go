@@ -23,6 +23,7 @@ import (
 	"oldtabletdash/internal/config"
 	"oldtabletdash/internal/ha"
 	"oldtabletdash/internal/rss"
+	"oldtabletdash/internal/theming"
 )
 
 //go:embed static/*
@@ -428,6 +429,11 @@ func (s *Server) saveConfig(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		http.Error(w, "save failed", http.StatusInternalServerError)
 		return
+	}
+	if theme, ok := theming.Evaluate(out, s.ha); ok {
+		if updated, err := s.cfg.SetTheme(theme); err == nil {
+			out = updated
+		}
 	}
 	writeJSON(w, http.StatusOK, out)
 }

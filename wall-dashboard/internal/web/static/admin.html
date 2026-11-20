@@ -153,13 +153,26 @@
     <div class="toolbar">
       <label>Устройство <select id="device"></select></label>
       <label>Колонки <input id="columns" type="number" min="2" max="12" style="width:64px;"></label>
-      <label>Тема <select id="theme"><option value="dark">тёмная</option><option value="light">светлая</option></select></label>
+      <label>Тема <select id="theme-mode">
+        <option value="manual">вручную</option>
+        <option value="sun">по солнцу</option>
+        <option value="entity">по сущности</option>
+        <option value="time">по времени iPad</option>
+      </select></label>
+      <label id="theme-color-wrap">Цвет <select id="theme"><option value="dark">тёмная</option><option value="light">светлая</option></select></label>
       <label>Заголовок <input id="title" style="width:180px;"></label>
       <span class="spacer"></span>
       <span id="dirty"></span>
       <button id="add">+ Виджет</button>
       <button id="pack">Упорядочить</button>
       <button id="save" class="primary">Сохранить</button>
+    </div>
+
+    <div class="toolbar" id="theme-extra">
+      <label id="tm-entity-wrap">Сущность <input id="theme-entity" list="entity-list" placeholder="input_boolean.night"></label>
+      <label id="tm-state-wrap">Тёмная при <input id="theme-dark-state" placeholder="on" style="width:110px;"></label>
+      <label id="tm-dark-wrap">Темно с <input id="theme-dark-from" type="time"></label>
+      <label id="tm-light-wrap">Светло с <input id="theme-light-from" type="time"></label>
     </div>
 
     <div class="editor-body">

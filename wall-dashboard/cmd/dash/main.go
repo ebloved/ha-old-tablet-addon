@@ -14,6 +14,7 @@ import (
 	"oldtabletdash/internal/config"
 	"oldtabletdash/internal/ha"
 	"oldtabletdash/internal/rss"
+	"oldtabletdash/internal/theming"
 	"oldtabletdash/internal/web"
 )
 
@@ -72,6 +73,29 @@ func main() {
 	defer stop()
 
 	go hac.Run(ctx)
+
+	themeTick := 30 * time.Second
+	if v := os.Getenv("THEME_TICK"); v != "" {
+		if d, err := time.ParseDuration(v); err == nil && d > 0 {
+			themeTick = d
+		}
+	}
+	go func() {
+		t := time.NewTicker(themeTick)
+		defer t.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-t.C:
+				if theme, ok := theming.Evaluate(store.Get(), hac); ok {
+					if _, err := store.SetTheme(theme); err != nil {
+						log.Warn("theme update failed", "err", err)
+					}
+				}
+			}
+		}
+	}()
 
 	ingressAddr := env("INGRESS_ADDR", ":8080")
 	tabletAddr := env("TABLET_ADDR", ":8088")

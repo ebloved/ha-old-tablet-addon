@@ -42,14 +42,19 @@ type Widget struct {
 }
 
 type Config struct {
-	Version       int      `json:"version"`
-	LayoutVersion int      `json:"layout_version"`
-	Title         string   `json:"title"`
-	Theme         string   `json:"theme"`
-	Columns       int      `json:"columns"`
-	Device        string   `json:"device"`
-	DeviceToken   string   `json:"device_token,omitempty"`
-	Widgets       []Widget `json:"widgets"`
+	Version        int      `json:"version"`
+	LayoutVersion  int      `json:"layout_version"`
+	Title          string   `json:"title"`
+	Theme          string   `json:"theme"`
+	ThemeMode      string   `json:"theme_mode,omitempty"`
+	ThemeEntity    string   `json:"theme_entity,omitempty"`
+	ThemeDarkState string   `json:"theme_dark_state,omitempty"`
+	ThemeDarkFrom  string   `json:"theme_dark_from,omitempty"`
+	ThemeLightFrom string   `json:"theme_light_from,omitempty"`
+	Columns        int      `json:"columns"`
+	Device         string   `json:"device"`
+	DeviceToken    string   `json:"device_token,omitempty"`
+	Widgets        []Widget `json:"widgets"`
 }
 
 var devices = map[string]bool{
@@ -58,6 +63,23 @@ var devices = map[string]bool{
 	"ipad-10.9": true,
 	"ipad-12.9": true,
 	"custom":    true,
+}
+
+var themeModes = map[string]bool{
+	"manual": true,
+	"sun":    true,
+	"entity": true,
+	"time":   true,
+}
+
+var clockRe = regexp.MustCompile(`^([01][0-9]|2[0-3]):[0-5][0-9]$`)
+
+func normalizeClock(v, fallback string) string {
+	v = strings.TrimSpace(v)
+	if clockRe.MatchString(v) {
+		return v
+	}
+	return fallback
 }
 
 type Store struct {
@@ -100,6 +122,14 @@ func NewStore(dir string) (*Store, error) {
 	if s.cfg.Theme != "light" {
 		s.cfg.Theme = "dark"
 	}
+	if !themeModes[s.cfg.ThemeMode] {
+		s.cfg.ThemeMode = "manual"
+	}
+	if s.cfg.ThemeDarkState == "" {
+		s.cfg.ThemeDarkState = "on"
+	}
+	s.cfg.ThemeDarkFrom = normalizeClock(s.cfg.ThemeDarkFrom, "21:00")
+	s.cfg.ThemeLightFrom = normalizeClock(s.cfg.ThemeLightFrom, "07:00")
 	if s.cfg.Columns < 2 || s.cfg.Columns > 12 {
 		s.cfg.Columns = 6
 	}
@@ -283,11 +313,16 @@ func (s *Store) persistLocked() error {
 
 func sanitize(in Config, token string) Config {
 	out := Config{
-		Title:       strings.TrimSpace(in.Title),
-		Theme:       in.Theme,
-		Columns:     in.Columns,
-		Device:      in.Device,
-		DeviceToken: token,
+		Title:          strings.TrimSpace(in.Title),
+		Theme:          in.Theme,
+		ThemeMode:      in.ThemeMode,
+		ThemeEntity:    strings.TrimSpace(in.ThemeEntity),
+		ThemeDarkState: strings.TrimSpace(in.ThemeDarkState),
+		ThemeDarkFrom:  in.ThemeDarkFrom,
+		ThemeLightFrom: in.ThemeLightFrom,
+		Columns:        in.Columns,
+		Device:         in.Device,
+		DeviceToken:    token,
 	}
 	if out.Title == "" {
 		out.Title = "Home"
@@ -295,6 +330,17 @@ func sanitize(in Config, token string) Config {
 	if out.Theme != "light" {
 		out.Theme = "dark"
 	}
+	if !themeModes[out.ThemeMode] {
+		out.ThemeMode = "manual"
+	}
+	if out.ThemeDarkState == "" {
+		out.ThemeDarkState = "on"
+	}
+	if out.ThemeEntity != "" && !entityRe.MatchString(out.ThemeEntity) {
+		out.ThemeEntity = ""
+	}
+	out.ThemeDarkFrom = normalizeClock(out.ThemeDarkFrom, "21:00")
+	out.ThemeLightFrom = normalizeClock(out.ThemeLightFrom, "07:00")
 	if out.Columns < 2 || out.Columns > 12 {
 		out.Columns = 6
 	}
