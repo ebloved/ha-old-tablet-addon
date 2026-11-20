@@ -18,9 +18,6 @@
     } catch (e) {
       /* ignore */
     }
-    if (window.history && history.replaceState) {
-      history.replaceState(null, '', location.pathname + location.hash);
-    }
   }
 
   var grid = document.getElementById('grid');
@@ -382,7 +379,7 @@
             a.className = 'rss-item';
             a.href = it.link || '#';
             a.target = '_blank';
-            a.rel = 'noopener';
+            a.rel = 'noopener noreferrer';
 
             var title = document.createElement('div');
             title.className = 'rss-title';
@@ -416,7 +413,7 @@
     var h = document.createElement('h1');
     h.textContent = 'Нужен токен';
     var t = document.createElement('p');
-    t.textContent = 'Откройте админку (панель Old Tablet в Home Assistant) и скопируйте ссылку для планшета.';
+    t.textContent = 'Откройте админку (панель Old Tablet в Home Assistant) и скопируйте ссылку для планшета. В ссылке должен быть параметр ?t=…';
     p.appendChild(h);
     p.appendChild(t);
     o.appendChild(p);
