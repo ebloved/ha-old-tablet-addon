@@ -153,6 +153,33 @@ func (s *Store) RegenerateToken() (string, error) {
 	return t, nil
 }
 
+func (s *Store) SetTheme(theme string) (Config, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if theme != "light" {
+		theme = "dark"
+	}
+	if s.cfg.Theme == theme {
+		c := s.cfg
+		c.Widgets = append([]Widget(nil), s.cfg.Widgets...)
+		return c, nil
+	}
+	s.cfg.Theme = theme
+	s.cfg.Version++
+	if err := s.persistLocked(); err != nil {
+		return Config{}, err
+	}
+	for ch := range s.subs {
+		select {
+		case ch <- s.cfg.Version:
+		default:
+		}
+	}
+	c := s.cfg
+	c.Widgets = append([]Widget(nil), s.cfg.Widgets...)
+	return c, nil
+}
+
 // Subscribe returns a buffered channel that receives the new config version
 // every time the config is saved.
 func (s *Store) Subscribe() chan int {

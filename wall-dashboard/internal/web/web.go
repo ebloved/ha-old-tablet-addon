@@ -315,8 +315,8 @@ func (s *Server) action(w http.ResponseWriter, r *http.Request) {
 
 var allowedDomains = map[string]bool{
 	"light": true, "switch": true, "fan": true, "cover": true,
-	"script": true, "scene": true, "input_boolean": true,
-	"media_player": true, "climate": true, "automation": true,
+	"script": true, "scene": true, "button": true, "input_button": true,
+	"input_boolean": true, "media_player": true, "climate": true, "automation": true,
 }
 
 func validEntity(id string) bool {

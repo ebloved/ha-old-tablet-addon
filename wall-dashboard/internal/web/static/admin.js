@@ -17,6 +17,8 @@
   var dragged = false;
   var resizing = false;
 
+  var ACTION_DOMAINS = { script: true, scene: true, button: true, input_button: true };
+
   function $(id) {
     return document.getElementById(id);
   }
@@ -252,12 +254,16 @@
     } else {
       var info = entityInfo(w.entity);
       var state = info ? info.state : '—';
+      var domain = (w.entity || '').split('.')[0];
+      var isAction = !!ACTION_DOMAINS[domain];
       var name = document.createElement('div');
       name.className = 'name';
       name.textContent = autoName(w);
       var value = document.createElement('div');
       value.className = 'value';
-      if (w.type === 'sensor') {
+      if (isAction) {
+        value.textContent = 'Run';
+      } else if (w.type === 'sensor') {
         value.textContent = state;
       } else if (state === 'on') {
         value.textContent = 'On';
@@ -269,7 +275,7 @@
       var sub = document.createElement('div');
       sub.className = 'sub';
       sub.textContent = w.type === 'sensor' ? '' : w.entity || '';
-      if (isOn(state)) {
+      if (!isAction && isOn(state)) {
         tile.classList.add('active');
       }
       tile.appendChild(name);

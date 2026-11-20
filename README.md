@@ -97,6 +97,33 @@ docker build --build-arg BUILD_FROM=ghcr.io/home-assistant/amd64-base:3.20 \
   -t local/old-tablet-dashboard:0.1.0 wall-dashboard
 ```
 
+## Скрипты, сцены, кнопки
+
+Виджет `entity` работает и с action-сущностями. Тап по плитке вызывает
+`script.turn_on`, `scene.turn_on`, `button.press` или `input_button.press`;
+для света и прочего — `toggle`, для штор — `open_cover`/`close_cover`.
+На плитке показывается «Run» и время последнего запуска.
+
+## Автоматизация темы
+
+Аддон слушает событие `old_tablet_dashboard_theme` и сохраняет тему. Значит,
+её можно переключать автоматизацией:
+
+```yaml
+alias: Dashboard theme at sunset
+triggers:
+  - trigger: sun
+    event: sunset
+actions:
+  - event: old_tablet_dashboard_theme
+    event_data:
+      theme: dark
+```
+
+Симметрично на `sunrise` — `theme: light`. Тема применяется без перезагрузки
+планшета (SSE) и переживает рестарт аддона. Событие можно отправить и руками
+из «Инструментов разработчика» → «События».
+
 ## Ограничения
 
 - Только HAOS / Supervised: аддонам нужен Supervisor.

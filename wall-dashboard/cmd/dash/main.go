@@ -58,6 +58,14 @@ func main() {
 	}
 
 	hac := ha.New(base, token, log)
+	hac.SetThemeHandler(func(theme string) {
+		c, err := store.SetTheme(theme)
+		if err != nil {
+			log.Warn("theme update failed", "err", err)
+			return
+		}
+		log.Info("theme updated from home assistant", "theme", c.Theme)
+	})
 	feeds := rss.New(time.Duration(opts.RSSRefresh)*time.Second, log)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)

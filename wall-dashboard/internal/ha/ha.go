@@ -39,6 +39,9 @@ type Client struct {
 	subMu sync.Mutex
 	subs  map[chan State]struct{}
 
+	themeMu sync.RWMutex
+	onTheme func(string)
+
 	wmu sync.Mutex
 }
 
@@ -100,6 +103,12 @@ func (c *Client) Connected() bool {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return c.connected
+}
+
+func (c *Client) SetThemeHandler(fn func(string)) {
+	c.themeMu.Lock()
+	c.onTheme = fn
+	c.themeMu.Unlock()
 }
 
 func (c *Client) Subscribe() chan State {
@@ -258,6 +267,11 @@ func (c *Client) runOnce(ctx context.Context, url string) (bool, error) {
 			}); err != nil {
 				return authed, err
 			}
+			if err := c.writeJSON(conn, map[string]any{
+				"id": 3, "type": "subscribe_events", "event_type": "old_tablet_dashboard_theme",
+			}); err != nil {
+				return authed, err
+			}
 		case "result":
 			if m.ID == 1 && authed {
 				var list []State
@@ -272,23 +286,40 @@ func (c *Client) runOnce(ctx context.Context, url string) (bool, error) {
 			}
 		case "event":
 			var ev struct {
-				EventType string `json:"event_type"`
-				Data      struct {
-					EntityID string `json:"entity_id"`
-					NewState *State `json:"new_state"`
-				} `json:"data"`
+				EventType string          `json:"event_type"`
+				Data      json.RawMessage `json:"data"`
 			}
 			if err := json.Unmarshal(m.Event, &ev); err != nil {
 				continue
 			}
-			if ev.EventType != "state_changed" || ev.Data.NewState == nil {
-				continue
+			switch ev.EventType {
+			case "state_changed":
+				var d struct {
+					EntityID string `json:"entity_id"`
+					NewState *State `json:"new_state"`
+				}
+				if err := json.Unmarshal(ev.Data, &d); err != nil || d.NewState == nil {
+					continue
+				}
+				st := *d.NewState
+				c.mu.Lock()
+				c.states[st.EntityID] = st
+				c.mu.Unlock()
+				c.broadcast(st)
+			case "old_tablet_dashboard_theme":
+				var d struct {
+					Theme string `json:"theme"`
+				}
+				if err := json.Unmarshal(ev.Data, &d); err != nil {
+					continue
+				}
+				c.themeMu.RLock()
+				fn := c.onTheme
+				c.themeMu.RUnlock()
+				if fn != nil {
+					fn(d.Theme)
+				}
 			}
-			st := *ev.Data.NewState
-			c.mu.Lock()
-			c.states[st.EntityID] = st
-			c.mu.Unlock()
-			c.broadcast(st)
 		}
 	}
 }

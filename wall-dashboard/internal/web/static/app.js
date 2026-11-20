@@ -3,6 +3,8 @@
 
   var TOKEN_KEY = 'otd_token';
 
+  var ACTION_DOMAINS = { script: true, scene: true, button: true, input_button: true };
+
   var token = '';
   try {
     token = localStorage.getItem(TOKEN_KEY) || '';
@@ -41,6 +43,41 @@
 
   function pad(n) {
     return n < 10 ? '0' + n : '' + n;
+  }
+
+  function relTime(iso) {
+    if (!iso) {
+      return '';
+    }
+    var t = Date.parse(iso);
+    if (isNaN(t)) {
+      return '';
+    }
+    var s = Math.round((Date.now() - t) / 1000);
+    if (s < 60) {
+      return 'только что';
+    }
+    if (s < 3600) {
+      return Math.round(s / 60) + ' мин назад';
+    }
+    if (s < 86400) {
+      return Math.round(s / 3600) + ' ч назад';
+    }
+    return Math.round(s / 86400) + ' дн назад';
+  }
+
+  function defaultService(entity, st) {
+    var domain = (entity || '').split('.')[0];
+    if (domain === 'script' || domain === 'scene') {
+      return 'turn_on';
+    }
+    if (domain === 'button' || domain === 'input_button') {
+      return 'press';
+    }
+    if (domain === 'cover') {
+      return st && (st.state === 'open' || st.state === 'opening') ? 'close_cover' : 'open_cover';
+    }
+    return 'toggle';
   }
 
   function toast(msg) {
@@ -141,8 +178,12 @@
   function paint(node, w, st) {
     var valueEl = node.querySelector('.value');
     var subEl = node.querySelector('.sub');
+    var nameEl = node.querySelector('.name');
     if (!valueEl) {
       return;
+    }
+    if (nameEl && !w.name) {
+      nameEl.textContent = friendly(w);
     }
     if (!st) {
       valueEl.textContent = '—';
@@ -154,9 +195,19 @@
     }
 
     var v = st.state;
+    var domain = (w.entity || '').split('.')[0];
     var unit = '';
     if (st.attributes && st.attributes.unit_of_measurement) {
       unit = ' ' + String(st.attributes.unit_of_measurement);
+    }
+
+    if (ACTION_DOMAINS[domain]) {
+      valueEl.textContent = 'Run';
+      node.classList.remove('active');
+      if (subEl) {
+        subEl.textContent = relTime(st.attributes && st.attributes.last_triggered);
+      }
+      return;
     }
 
     if (w.type === 'sensor') {
@@ -218,11 +269,7 @@
 
   function toggle(w) {
     var st = entityState(w.entity);
-    var svc = 'toggle';
-    if (w.entity.indexOf('cover.') === 0) {
-      svc = st && (st.state === 'open' || st.state === 'opening') ? 'close_cover' : 'open_cover';
-    }
-    act(w.entity, svc);
+    act(w.entity, defaultService(w.entity, st));
   }
 
   function act(id, service) {
