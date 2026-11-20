@@ -44,6 +44,9 @@ func (s *Server) Handler() http.Handler {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		fmt.Fprintln(w, "ok")
 	})
+	mux.HandleFunc("GET /favicon.ico", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	})
 
 	mux.HandleFunc("GET /", s.index)
 	mux.HandleFunc("GET /app.js", staticFile("app.js", "application/javascript; charset=utf-8"))
@@ -132,6 +135,9 @@ func (s *Server) index(w http.ResponseWriter, r *http.Request) {
 	}
 	page = strings.ReplaceAll(page, "__ADMIN_LINK__", adminLink)
 	page = strings.ReplaceAll(page, "__V__", strconv.Itoa(s.cfg.Get().Version))
+	c := s.cfg.Get()
+	page = strings.ReplaceAll(page, "__THEME__", c.Theme)
+	page = strings.ReplaceAll(page, "__COLS__", strconv.Itoa(c.Columns))
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-cache")
@@ -341,6 +347,10 @@ func (s *Server) feed(w http.ResponseWriter, r *http.Request) {
 	}
 	if widget == nil {
 		http.Error(w, "feed not found", http.StatusNotFound)
+		return
+	}
+	if widget.Feed == "" {
+		writeJSON(w, http.StatusOK, map[string]any{"items": []any{}})
 		return
 	}
 	items, err := s.rss.Get(r.Context(), widget.Feed, widget.Limit)

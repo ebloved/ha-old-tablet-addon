@@ -82,10 +82,10 @@
     var node = document.createElement('div');
     node.className = 'tile t-' + w.type;
     if (w.w) {
-      node.style.gridColumn = 'span ' + Math.min(6, w.w);
+      node.style.gridColumn = 'span ' + Math.min(cfg.columns || 6, w.w);
     }
     if (w.h) {
-      node.style.gridRow = 'span ' + Math.min(4, w.h);
+      node.style.gridRow = 'span ' + Math.min(6, w.h);
     }
 
     if (w.type === 'clock') {
@@ -273,6 +273,8 @@
       .then(function (c) {
         cfg = c;
         document.title = c.title || 'Home';
+        document.body.className = 'theme-' + (c.theme === 'light' ? 'light' : 'dark');
+        grid.style.setProperty('--cols', c.columns || 6);
         render();
         return loadStates().then(function () {
           return true;
@@ -357,6 +359,10 @@
 
   function loadFeed(node, w) {
     var list = node.querySelector('.rss');
+    if (!w.feed) {
+      list.textContent = 'лента не задана';
+      return;
+    }
 
     function refresh() {
       api('api/rss?id=' + encodeURIComponent(w.id))

@@ -4,23 +4,22 @@
 <meta charset="utf-8">
 <base href="__BASE__/">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Old Tablet Dashboard — admin</title>
+<title>Old Tablet Dashboard — editor</title>
 <style>
-  :root { --bg:#0f1318; --card:#171d25; --line:#26303c; --text:#e6edf5; --muted:#8b9bb0; --accent:#4aa8ff; --on:#6fc96b; --danger:#e05d5d; }
+  :root { --bg:#0f1318; --card:#171d25; --panel:#0b0f14; --line:#26303c; --text:#e6edf5; --muted:#8b9bb0; --accent:#4aa8ff; --on:#6fc96b; --danger:#e05d5d; }
   * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
   body { margin:0; padding:24px; background:var(--bg); color:var(--text); font:14px/1.45 -apple-system, "Helvetica Neue", Arial, sans-serif; }
   h1 { font-size:20px; margin:0 0 4px; }
   h2 { font-size:15px; margin:24px 0 10px; color:var(--muted); text-transform:uppercase; letter-spacing:.05em; }
-  .wrap { max-width:1100px; margin:0 auto; }
+  .wrap { max-width:1280px; margin:0 auto; }
   .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:16px; }
-  .row { display:flex; flex-wrap:wrap; align-items:center; gap:10px; }
+  .row { display:flex; flex-wrap:wrap; align-items:center; }
+  .row > * { margin-right:10px; margin-bottom:6px; }
   .muted { color:var(--muted); }
   .dot { width:9px; height:9px; border-radius:50%; background:#3a4553; display:inline-block; margin-right:6px; }
   .dot.on { background:var(--on); }
-  code { background:#0b0f14; border:1px solid var(--line); border-radius:7px; padding:3px 7px; font-size:12px; word-break:break-all; }
-  .qr-row { display:flex; align-items:flex-start; flex-wrap:wrap; }
-  .qr { width:180px; height:180px; background:#fff; border-radius:10px; padding:6px; margin-right:18px; flex:0 0 auto; }
-  .qr-side { flex:1 1 320px; min-width:260px; }
+  code { background:var(--panel); border:1px solid var(--line); border-radius:7px; padding:3px 7px; font-size:12px; word-break:break-all; }
   input, select, button { font:inherit; color:var(--text); background:#0d1218; border:1px solid var(--line); border-radius:8px; padding:7px 9px; }
   input:focus, select:focus { outline:1px solid var(--accent); }
   button { cursor:pointer; background:#1d2632; }
@@ -28,21 +27,80 @@
   button.primary { background:#1f4d7a; border-color:#2a6da8; }
   button.danger { background:#3a2020; border-color:#5a2a2a; color:#ffb4b4; }
   button:disabled { opacity:.45; cursor:default; }
-  table { width:100%; border-collapse:collapse; }
-  th, td { text-align:left; padding:6px 6px; border-bottom:1px solid var(--line); vertical-align:middle; }
-  th { color:var(--muted); font-weight:500; font-size:12px; text-transform:uppercase; letter-spacing:.04em; }
-  td input, td select { width:100%; }
-  td.num input { width:56px; }
-  td.actions { white-space:nowrap; width:1%; }
-  td.actions button { padding:5px 8px; margin-left:4px; }
+
+  .qr-row { display:flex; align-items:flex-start; flex-wrap:wrap; }
+  .qr { width:180px; height:180px; background:#fff; border-radius:10px; padding:6px; margin-right:18px; flex:0 0 auto; }
+  .qr-side { flex:1 1 320px; min-width:260px; }
   .warn { margin-top:10px; color:#e8c07a; font-size:13px; }
-  .ok { color:var(--on); }
+
+  .toolbar { display:flex; flex-wrap:wrap; align-items:center; margin-bottom:12px; }
+  .toolbar > * { margin-right:12px; margin-bottom:6px; }
+  .toolbar label { color:var(--muted); font-size:12px; display:flex; align-items:center; }
+  .toolbar input, .toolbar select { margin-left:6px; }
+  .toolbar .spacer { flex:1; }
+  #dirty { color:#e8c07a; font-size:12px; }
+
+  .editor-body { display:flex; align-items:flex-start; flex-wrap:wrap; }
+  .stage-wrap { flex:1 1 560px; min-width:320px; padding:12px; background:var(--panel); border:1px solid var(--line); border-radius:12px; }
+  .stage { position:relative; width:100%; max-width:1000px; margin:0 auto; }
+  .inspector { flex:0 0 300px; margin-left:14px; background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:14px; min-height:220px; }
+  @media (max-width: 900px) { .inspector { margin-left:0; margin-top:14px; flex:1 1 100%; } }
+
+  /* preview surface, mirrors app.css */
+  .canvas {
+    --t-bg:#0b0e12; --t-card:#151a21; --t-card-active:#17251d; --t-border:#1f2731;
+    --t-text:#e8eef6; --t-muted:#8b9bb0; --t-on:#6fc96b;
+    position:absolute; left:0; top:0; right:0; bottom:0;
+    padding:10px;
+    display:grid;
+    grid-template-columns:repeat(var(--cols,6), minmax(0,1fr));
+    grid-auto-rows:92px;
+    gap:9px;
+    align-content:start;
+    overflow-y:auto;
+    background:var(--t-bg);
+    border-radius:12px;
+  }
+  .canvas.theme-light {
+    --t-bg:#eef1f5; --t-card:#ffffff; --t-card-active:#e9f5ec; --t-border:#dce2ea;
+    --t-text:#1b2430; --t-muted:#6b7a8d; --t-on:#2f8b57;
+  }
+  .canvas .tile {
+    background:var(--t-card); border:1px solid var(--t-border); color:var(--t-text);
+    border-radius:13px; padding:11px 12px; overflow:hidden; position:relative;
+    display:flex; flex-direction:column; justify-content:space-between;
+    cursor:grab;
+  }
+  .canvas .tile.selected { outline:2px solid var(--accent); outline-offset:-1px; }
+  .canvas .tile.drop { outline:2px dashed var(--accent); outline-offset:-1px; }
+  .canvas .tile.dragging { opacity:.45; }
+  .canvas .tile.active { background:var(--t-card-active); border-color:var(--t-on); }
+  .canvas .name { font-size:12px; line-height:1.25; letter-spacing:.04em; text-transform:uppercase; color:var(--t-muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .canvas .value { font-size:26px; line-height:1.1; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .canvas .sub { font-size:11px; color:var(--t-muted); min-height:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .canvas .t-clock .value { font-size:32px; }
+  .canvas .t-sensor .value { font-size:23px; }
+  .canvas .t-rss { justify-content:flex-start; }
+  .canvas .rss-prev { margin-top:8px; }
+  .canvas .rss-line { height:9px; border-radius:4px; background:var(--t-border); margin-bottom:7px; }
+  .canvas .rss-line:nth-child(2) { width:86%; }
+  .canvas .rss-line:nth-child(3) { width:64%; }
+  .canvas .empty { grid-column:1 / -1; color:var(--t-muted); font-size:13px; padding:12px; }
+  .resize { position:absolute; right:0; bottom:0; width:22px; height:22px; cursor:nwse-resize; touch-action:none; display:none; }
+  .canvas .tile.selected .resize { display:block; }
+  .resize::after { content:''; position:absolute; right:4px; bottom:4px; width:9px; height:9px; border-right:2px solid var(--accent); border-bottom:2px solid var(--accent); }
+
+  .inspector label { display:block; margin-bottom:10px; color:var(--muted); font-size:12px; }
+  .inspector input, .inspector select { width:100%; margin-top:4px; }
+  .two { display:flex; }
+  .two > * { flex:1; margin-right:8px; }
+  .two > *:last-child { margin-right:0; }
 </style>
 </head>
 <body>
 <div class="wrap">
   <h1>Old Tablet Dashboard</h1>
-  <div class="muted">Лёгкий дашборд для старых iPad. Планшет ходит на отдельный порт, админка живёт внутри Home Assistant.</div>
+  <div class="muted">Визуальный редактор. Перетаскивайте плитки, тяните угол для размера, сохраняйте — планшет обновится сам.</div>
 
   <h2>Состояние</h2>
   <div class="card">
@@ -76,33 +134,67 @@
     <div class="warn">Наведите камеру iPad на QR — Safari откроет дашборд. Дальше «Поделиться» → «На экран Домой», Автозаблокировка → Никогда. Токен не публикуйте: он даёт управление устройствами в LAN.</div>
   </div>
 
-  <h2>Виджеты</h2>
+  <h2>Редактор</h2>
   <div class="card">
-    <div class="row" style="margin-bottom:10px;">
-      <label class="muted">Заголовок <input id="title" style="width:220px;margin-left:6px;"></label>
-    </div>
-    <table>
-      <thead>
-        <tr>
-          <th style="width:110px;">Тип</th>
-          <th>Сущность</th>
-          <th style="width:150px;">Подпись</th>
-          <th>RSS-лента</th>
-          <th style="width:70px;">Записей</th>
-          <th style="width:64px;">Ш</th>
-          <th style="width:64px;">В</th>
-          <th></th>
-        </tr>
-      </thead>
-      <tbody id="widgets"></tbody>
-    </table>
-    <datalist id="entity-list"></datalist>
-    <div class="row" style="margin-top:12px;">
-      <button id="add">+ Добавить</button>
+    <div class="toolbar">
+      <label>Устройство <select id="device"></select></label>
+      <label>Колонки <input id="columns" type="number" min="2" max="12" style="width:64px;"></label>
+      <label>Тема <select id="theme"><option value="dark">тёмная</option><option value="light">светлая</option></select></label>
+      <label>Заголовок <input id="title" style="width:180px;"></label>
+      <span class="spacer"></span>
+      <span id="dirty"></span>
+      <button id="add">+ Виджет</button>
       <button id="save" class="primary">Сохранить</button>
-      <span class="muted" id="save-status"></span>
+    </div>
+
+    <div class="editor-body">
+      <div class="stage-wrap">
+        <div class="stage" id="stage">
+          <div class="canvas" id="canvas"></div>
+        </div>
+      </div>
+
+      <aside class="inspector">
+        <div id="empty-inspector" class="muted">Выберите плитку на холсте.</div>
+        <div id="fields" hidden>
+          <label>Тип
+            <select id="e-type">
+              <option value="entity">entity</option>
+              <option value="sensor">sensor</option>
+              <option value="clock">clock</option>
+              <option value="rss">rss</option>
+            </select>
+          </label>
+          <label>Сущность
+            <input id="e-entity" list="entity-list" placeholder="light.kitchen">
+          </label>
+          <label>Подпись
+            <input id="e-name" placeholder="Kitchen">
+          </label>
+          <label>RSS-лента
+            <input id="e-feed" placeholder="https://example.com/feed.xml">
+          </label>
+          <label>Записей
+            <input id="e-limit" type="number" min="3" max="30">
+          </label>
+          <div class="two">
+            <label>Ширина
+              <input id="e-w" type="number" min="1" max="12">
+            </label>
+            <label>Высота
+              <input id="e-h" type="number" min="1" max="6">
+            </label>
+          </div>
+          <div class="two">
+            <button id="e-dup">Дублировать</button>
+            <button id="e-del" class="danger">Удалить</button>
+          </div>
+        </div>
+      </aside>
     </div>
   </div>
+
+  <datalist id="entity-list"></datalist>
 </div>
 <script src="admin.js?v=__V__"></script>
 </body>

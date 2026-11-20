@@ -35,8 +35,19 @@ type Widget struct {
 type Config struct {
 	Version     int      `json:"version"`
 	Title       string   `json:"title"`
+	Theme       string   `json:"theme"`
+	Columns     int      `json:"columns"`
+	Device      string   `json:"device"`
 	DeviceToken string   `json:"device_token,omitempty"`
 	Widgets     []Widget `json:"widgets"`
+}
+
+var devices = map[string]bool{
+	"ipad-9.7":  true,
+	"ipad-10.2": true,
+	"ipad-10.9": true,
+	"ipad-12.9": true,
+	"custom":    true,
 }
 
 type Store struct {
@@ -75,6 +86,15 @@ func NewStore(dir string) (*Store, error) {
 	}
 	if s.cfg.Title == "" {
 		s.cfg.Title = "Home"
+	}
+	if s.cfg.Theme != "light" {
+		s.cfg.Theme = "dark"
+	}
+	if s.cfg.Columns < 2 || s.cfg.Columns > 12 {
+		s.cfg.Columns = 6
+	}
+	if !devices[s.cfg.Device] {
+		s.cfg.Device = "ipad-9.7"
 	}
 	if s.cfg.Widgets == nil {
 		s.cfg.Widgets = []Widget{{ID: "clock", Type: "clock", W: 2, H: 1}}
@@ -167,10 +187,22 @@ func (s *Store) persistLocked() error {
 func sanitize(in Config, token string) Config {
 	out := Config{
 		Title:       strings.TrimSpace(in.Title),
+		Theme:       in.Theme,
+		Columns:     in.Columns,
+		Device:      in.Device,
 		DeviceToken: token,
 	}
 	if out.Title == "" {
 		out.Title = "Home"
+	}
+	if out.Theme != "light" {
+		out.Theme = "dark"
+	}
+	if out.Columns < 2 || out.Columns > 12 {
+		out.Columns = 6
+	}
+	if !devices[out.Device] {
+		out.Device = "ipad-9.7"
 	}
 	seen := make(map[string]bool)
 	for i, w := range in.Widgets {
@@ -184,12 +216,12 @@ func sanitize(in Config, token string) Config {
 			continue
 		}
 		if w.Type == "entity" || w.Type == "sensor" {
-			if !entityRe.MatchString(w.Entity) {
+			if w.Entity != "" && !entityRe.MatchString(w.Entity) {
 				continue
 			}
 		}
 		if w.Type == "rss" {
-			if !strings.HasPrefix(w.Feed, "http://") && !strings.HasPrefix(w.Feed, "https://") {
+			if w.Feed != "" && !strings.HasPrefix(w.Feed, "http://") && !strings.HasPrefix(w.Feed, "https://") {
 				continue
 			}
 		}
@@ -204,14 +236,14 @@ func sanitize(in Config, token string) Config {
 		if w.W < 1 {
 			w.W = 1
 		}
-		if w.W > 6 {
-			w.W = 6
+		if w.W > out.Columns {
+			w.W = out.Columns
 		}
 		if w.H < 1 {
 			w.H = 1
 		}
-		if w.H > 4 {
-			w.H = 4
+		if w.H > 6 {
+			w.H = 6
 		}
 		if w.Limit < 1 {
 			w.Limit = 8
