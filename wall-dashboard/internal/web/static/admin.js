@@ -194,7 +194,8 @@
   function renderCanvas() {
     var canvas = $('canvas');
     canvas.innerHTML = '';
-    canvas.style.setProperty('--cols', cfg.columns);
+    tileNodes = [];
+    canvas.style.setProperty('--tracks', cfg.columns * 2);
 
     if (!cfg.widgets.length) {
       var empty = document.createElement('div');
@@ -205,21 +206,120 @@
     }
 
     for (var i = 0; i < cfg.widgets.length; i++) {
-      canvas.appendChild(makeTile(cfg.widgets[i], i));
+      var node = makeTile(cfg.widgets[i], i);
+      canvas.appendChild(node);
+      tileNodes.push(node);
     }
   }
 
-  function applySpan(el, w) {
+  var tileNodes = [];
+  var dragOffTracks = 0;
+  var dragOffRows = 0;
+  var dragOrigX = 0;
+  var dragOrigY = 0;
+
+  function spanOf(v) {
+    return Math.max(1, Math.round((v || 1) * 2));
+  }
+
+  function place(el, w) {
     var tracks = cfg.columns * 2;
-    var span = Math.max(1, Math.min(tracks, Math.round((w.w || 1) * 2)));
-    el.style.gridColumn = (w.new_row ? '1 / span ' : 'span ') + span;
+    var span = Math.min(tracks, spanOf(w.w));
+    var x = Math.max(0, Math.min(w.x || 0, tracks - span));
+    el.style.gridColumn = x + 1 + ' / span ' + span;
+    var h = Math.max(1, Math.min(6, w.h || 1));
+    el.style.gridRow = (w.y || 0) + 1 + ' / span ' + h;
+  }
+
+  function geometry() {
+    var canvas = $('canvas');
+    var cs = getComputedStyle(canvas);
+    var gap = parseFloat(cs.columnGap) || 9;
+    var rowGap = parseFloat(cs.rowGap) || gap;
+    var padL = parseFloat(cs.paddingLeft) || 0;
+    var padT = parseFloat(cs.paddingTop) || 0;
+    var tracks = cfg.columns * 2;
+    var inner = canvas.clientWidth - padL - (parseFloat(cs.paddingRight) || 0) - gap * (tracks - 1);
+    return {
+      gap: gap,
+      rowGap: rowGap,
+      padL: padL,
+      padT: padT,
+      tracks: tracks,
+      trackW: Math.max(1, inner / tracks),
+      rowH: 92
+    };
+  }
+
+  function rectOf(w) {
+    return { x: w.x || 0, y: w.y || 0, w: spanOf(w.w), h: Math.max(1, Math.min(6, w.h || 1)) };
+  }
+
+  function rectOverlap(a, b) {
+    return a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+  }
+
+  function overlaps(i) {
+    var a = rectOf(cfg.widgets[i]);
+    for (var k = 0; k < cfg.widgets.length; k++) {
+      if (k === i) {
+        continue;
+      }
+      if (rectOverlap(a, rectOf(cfg.widgets[k]))) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  function freeSpot(span, h) {
+    var tracks = cfg.columns * 2;
+    for (var y = 0; y < 80; y++) {
+      for (var x = 0; x <= tracks - span; x++) {
+        var r = { x: x, y: y, w: span, h: h };
+        var free = true;
+        for (var i = 0; i < cfg.widgets.length; i++) {
+          if (rectOverlap(r, rectOf(cfg.widgets[i]))) {
+            free = false;
+            break;
+          }
+        }
+        if (free) {
+          return { x: x, y: y };
+        }
+      }
+    }
+    return { x: 0, y: 0 };
+  }
+
+  function packAll() {
+    var tracks = cfg.columns * 2;
+    var x = 0;
+    var y = 0;
+    var rowH = 0;
+    for (var i = 0; i < cfg.widgets.length; i++) {
+      var w = cfg.widgets[i];
+      var span = spanOf(w.w);
+      if (x + span > tracks) {
+        x = 0;
+        y += rowH;
+        rowH = 0;
+      }
+      w.x = x;
+      w.y = y;
+      x += span;
+      if ((w.h || 1) > rowH) {
+        rowH = w.h || 1;
+      }
+    }
+    markDirty();
+    renderAll();
   }
 
   function makeTile(w, i) {
     var tile = document.createElement('div');
     tile.className = 'tile t-' + (w.type || 'entity');
-    applySpan(tile, w);
-    tile.style.gridRow = 'span ' + Math.min(w.h || 1, 6);
+    place(tile, w);
     tile.setAttribute('draggable', 'true');
     if (i === selected) {
       tile.classList.add('selected');
@@ -335,6 +435,13 @@
       }
       dragged = true;
       dragIndex = i;
+      var dw = cfg.widgets[i];
+      dragOrigX = dw.x || 0;
+      dragOrigY = dw.y || 0;
+      var g = geometry();
+      var r = tile.getBoundingClientRect();
+      dragOffTracks = (e.clientX - r.left) / (g.trackW + g.gap);
+      dragOffRows = (e.clientY - r.top) / (g.rowH + g.rowGap);
       try {
         e.dataTransfer.setData('text/plain', String(i));
       } catch (err) {
@@ -345,33 +452,7 @@
     });
 
     tile.addEventListener('dragend', function () {
-      tile.classList.remove('dragging');
-      dragIndex = -1;
-      clearDropMarks();
-      setTimeout(function () {
-        dragged = false;
-      }, 0);
-    });
-
-    tile.addEventListener('dragover', function (e) {
-      if (dragIndex < 0 || dragIndex === i) {
-        return;
-      }
-      e.preventDefault();
-      e.dataTransfer.dropEffect = 'move';
-      tile.classList.add('drop');
-    });
-
-    tile.addEventListener('dragleave', function () {
-      tile.classList.remove('drop');
-    });
-
-    tile.addEventListener('drop', function (e) {
-      e.preventDefault();
-      tile.classList.remove('drop');
-      if (dragIndex >= 0 && dragIndex !== i) {
-        moveWidget(dragIndex, i);
-      }
+      finishDrag(false);
     });
 
     var handle = document.createElement('div');
@@ -392,28 +473,39 @@
     return tile;
   }
 
-  function clearDropMarks() {
-    var nodes = $('canvas').querySelectorAll('.drop');
-    for (var i = 0; i < nodes.length; i++) {
-      nodes[i].classList.remove('drop');
+  function finishDrag(dropped) {
+    if (dragIndex < 0) {
+      return;
     }
-  }
-
-  function moveWidget(from, to) {
-    var item = cfg.widgets.splice(from, 1)[0];
-    cfg.widgets.splice(to, 0, item);
-    selected = to;
-    markDirty();
-    rerenderCanvas();
-    renderInspector();
+    var i = dragIndex;
+    var w = cfg.widgets[i];
+    dragIndex = -1;
+    if (!w) {
+      return;
+    }
+    if (tileNodes[i]) {
+      tileNodes[i].classList.remove('dragging');
+      tileNodes[i].classList.remove('overlap');
+    }
+    if (!dropped || overlaps(i)) {
+      w.x = dragOrigX;
+      w.y = dragOrigY;
+      if (tileNodes[i]) {
+        place(tileNodes[i], w);
+      }
+    } else if (w.x !== dragOrigX || w.y !== dragOrigY) {
+      markDirty();
+    }
+    setTimeout(function () {
+      dragged = false;
+    }, 0);
   }
 
   function select(i) {
     selected = i;
-    var nodes = $('canvas').children;
-    for (var k = 0; k < nodes.length; k++) {
-      if (nodes[k].classList && nodes[k].classList.contains('tile')) {
-        nodes[k].classList.toggle('selected', k === i);
+    for (var k = 0; k < tileNodes.length; k++) {
+      if (tileNodes[k]) {
+        tileNodes[k].classList.toggle('selected', k === i);
       }
     }
     renderInspector();
@@ -435,7 +527,6 @@
     setVal('e-interval', w.interval || 3);
     setVal('e-w', w.w || 1);
     setVal('e-h', w.h || 1);
-    $('e-newrow').checked = !!w.new_row;
     applyFieldState();
   }
 
@@ -468,22 +559,17 @@
     select(i);
 
     var w = cfg.widgets[i];
-    var tile = ev.currentTarget.parentNode;
+    var tile = tileNodes[i] || ev.currentTarget.parentNode;
     var touch = ev.type === 'touchstart';
     var p0 = touch ? ev.touches[0] : ev;
     var startX = p0.clientX;
     var startY = p0.clientY;
-    var startW = w.w || 1;
+    var startSpan = spanOf(w.w);
     var startH = w.h || 1;
+    var origW = w.w;
+    var origH = w.h;
 
-    var canvas = $('canvas');
-    var cs = getComputedStyle(canvas);
-    var gap = parseFloat(cs.columnGap) || 9;
-    var pad = (parseFloat(cs.paddingLeft) || 0) + (parseFloat(cs.paddingRight) || 0);
-    var tracks = cfg.columns * 2;
-    var cellW = (canvas.clientWidth - pad - gap * (tracks - 1)) / tracks + gap;
-    var rowH = 92 + gap;
-
+    var g = geometry();
     resizing = true;
 
     function move(e) {
@@ -494,16 +580,17 @@
       if (e.cancelable) {
         e.preventDefault();
       }
-      var nw = clamp(startW + Math.round((p.clientX - startX) / cellW) * 0.5, 0.5, cfg.columns);
-      nw = Math.round(nw * 2) / 2;
-      var nh = clamp(startH + Math.round((p.clientY - startY) / rowH), 1, 6);
-      if (nw !== w.w || nh !== w.h) {
-        w.w = nw;
-        w.h = nh;
-        applySpan(tile, w);
-        tile.style.gridRow = 'span ' + nh;
-        $('e-w').value = nw;
-        $('e-h').value = nh;
+      var dSpan = Math.round((p.clientX - startX) / (g.trackW + g.gap));
+      var dH = Math.round((p.clientY - startY) / (g.rowH + g.rowGap));
+      var span = clamp(startSpan + dSpan, 1, g.tracks - (w.x || 0));
+      var h = clamp(startH + dH, 1, 6);
+      if (span !== spanOf(w.w) || h !== w.h) {
+        w.w = span / 2;
+        w.h = h;
+        place(tile, w);
+        tile.classList.toggle('overlap', overlaps(i));
+        $('e-w').value = w.w;
+        $('e-h').value = h;
         markDirty();
       }
     }
@@ -514,6 +601,12 @@
       document.removeEventListener('mouseup', up);
       document.removeEventListener('touchmove', move);
       document.removeEventListener('touchend', up);
+      if (overlaps(i)) {
+        w.w = origW;
+        w.h = origH;
+        place(tile, w);
+        tile.classList.remove('overlap');
+      }
       rerenderCanvas();
       renderInspector();
     }
@@ -538,7 +631,8 @@
   }
 
   function addWidget() {
-    cfg.widgets.push({ id: '', type: 'entity', entity: '', name: '', interval: 3, new_row: false, w: 2, h: 1 });
+    var spot = freeSpot(spanOf(2), 1);
+    cfg.widgets.push({ id: '', type: 'entity', entity: '', name: '', interval: 3, x: spot.x, y: spot.y, w: 2, h: 1 });
     selected = cfg.widgets.length - 1;
     markDirty();
     renderAll();
@@ -550,6 +644,9 @@
     }
     var copy = JSON.parse(JSON.stringify(cfg.widgets[selected]));
     copy.id = '';
+    var spot = freeSpot(spanOf(copy.w), copy.h || 1);
+    copy.x = spot.x;
+    copy.y = spot.y;
     cfg.widgets.splice(selected + 1, 0, copy);
     selected = selected + 1;
     markDirty();
@@ -582,6 +679,7 @@
       theme: cfg.theme,
       columns: cfg.columns,
       device: cfg.device,
+      layout_version: 2,
       widgets: cfg.widgets
     };
     req('PUT', 'api/admin/config', body)
@@ -646,8 +744,42 @@
 
   $('save').addEventListener('click', save);
   $('add').addEventListener('click', addWidget);
+  $('pack').addEventListener('click', packAll);
   $('regen').addEventListener('click', regen);
   $('host').addEventListener('change', renderTablet);
+
+  var canvasEl = $('canvas');
+  canvasEl.addEventListener('dragover', function (e) {
+    if (dragIndex < 0) {
+      return;
+    }
+    e.preventDefault();
+    var w = cfg.widgets[dragIndex];
+    if (!w) {
+      return;
+    }
+    var g = geometry();
+    var rect = canvasEl.getBoundingClientRect();
+    var px = e.clientX - rect.left - g.padL + canvasEl.scrollLeft;
+    var py = e.clientY - rect.top - g.padT + canvasEl.scrollTop;
+    var span = spanOf(w.w);
+    var tx = Math.round(px / (g.trackW + g.gap) - dragOffTracks);
+    var ty = Math.round(py / (g.rowH + g.rowGap) - dragOffRows);
+    tx = clamp(tx, 0, g.tracks - span);
+    ty = Math.max(0, ty);
+    if (tx !== w.x || ty !== w.y) {
+      w.x = tx;
+      w.y = ty;
+      if (tileNodes[dragIndex]) {
+        place(tileNodes[dragIndex], w);
+        tileNodes[dragIndex].classList.toggle('overlap', overlaps(dragIndex));
+      }
+    }
+  });
+  canvasEl.addEventListener('drop', function (e) {
+    e.preventDefault();
+    finishDrag(true);
+  });
   $('e-dup').addEventListener('click', duplicateWidget);
   $('e-del').addEventListener('click', deleteWidget);
 
@@ -666,6 +798,15 @@
   $('columns').addEventListener('change', function () {
     cfg.columns = clamp(parseInt(this.value, 10) || 6, 2, 12);
     this.value = cfg.columns;
+    var tracks = cfg.columns * 2;
+    for (var i = 0; i < cfg.widgets.length; i++) {
+      var w = cfg.widgets[i];
+      var span = Math.min(spanOf(w.w), tracks);
+      w.w = span / 2;
+      if ((w.x || 0) + span > tracks) {
+        w.x = Math.max(0, tracks - span);
+      }
+    }
     markDirty();
     renderAll();
   });
@@ -762,7 +903,7 @@
     rerenderCanvas();
   });
 
-  $('e-newrow').addEventListener('change', function () {
+  $('e-newrow') && $('e-newrow').addEventListener('change', function () {
     var w = cfg.widgets[selected];
     if (!w) {
       return;

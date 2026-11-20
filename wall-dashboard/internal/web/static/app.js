@@ -138,15 +138,13 @@
     var node = document.createElement('div');
     node.className = 'tile t-' + w.type;
     var tracks = (cfg.columns || 6) * 2;
-    if (w.w) {
-      var span = Math.max(1, Math.min(tracks, Math.round(w.w * 2)));
-      node.style.gridColumn = (w.new_row ? '1 / span ' : 'span ') + span;
-    } else if (w.new_row) {
-      node.style.gridColumnStart = '1';
+    var span = Math.max(1, Math.min(tracks, Math.round((w.w || 1) * 2)));
+    var x = w.x || 0;
+    if (x + span > tracks) {
+      x = Math.max(0, tracks - span);
     }
-    if (w.h) {
-      node.style.gridRow = 'span ' + Math.min(6, w.h);
-    }
+    node.style.gridColumn = x + 1 + ' / span ' + span;
+    node.style.gridRow = (w.y || 0) + 1 + ' / span ' + Math.min(6, w.h || 1);
 
     if (w.type === 'spacer') {
       return node;

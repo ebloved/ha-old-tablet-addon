@@ -34,19 +34,22 @@ type Widget struct {
 	Feed     string  `json:"feed,omitempty"`
 	Limit    int     `json:"limit,omitempty"`
 	Interval int     `json:"interval,omitempty"`
-	W        float64 `json:"w,omitempty"`
-	H        int     `json:"h,omitempty"`
+	X        int     `json:"x"`
+	Y        int     `json:"y"`
+	W        float64 `json:"w"`
+	H        int     `json:"h"`
 	NewRow   bool    `json:"new_row,omitempty"`
 }
 
 type Config struct {
-	Version     int      `json:"version"`
-	Title       string   `json:"title"`
-	Theme       string   `json:"theme"`
-	Columns     int      `json:"columns"`
-	Device      string   `json:"device"`
-	DeviceToken string   `json:"device_token,omitempty"`
-	Widgets     []Widget `json:"widgets"`
+	Version       int      `json:"version"`
+	LayoutVersion int      `json:"layout_version"`
+	Title         string   `json:"title"`
+	Theme         string   `json:"theme"`
+	Columns       int      `json:"columns"`
+	Device        string   `json:"device"`
+	DeviceToken   string   `json:"device_token,omitempty"`
+	Widgets       []Widget `json:"widgets"`
 }
 
 var devices = map[string]bool{
@@ -106,10 +109,62 @@ func NewStore(dir string) (*Store, error) {
 	if s.cfg.Widgets == nil {
 		s.cfg.Widgets = []Widget{{ID: "clock", Type: "clock", W: 2, H: 1}}
 	}
+	if s.cfg.LayoutVersion < 2 {
+		packLayout(s.cfg.Widgets, s.cfg.Columns)
+		s.cfg.LayoutVersion = 2
+	}
 	if err := s.persistLocked(); err != nil {
 		return nil, err
 	}
 	return s, nil
+}
+
+// packLayout assigns x/y to widgets that predate free placement. It mimics
+// the old auto-flow grid so existing dashboards keep their look.
+func packLayout(widgets []Widget, columns int) {
+	tracks := columns * 2
+	if tracks < 2 {
+		tracks = 12
+	}
+	x, y, rowH := 0, 0, 0
+	for i := range widgets {
+		w := &widgets[i]
+		span := spanOf(w.W)
+		if w.NewRow && x != 0 {
+			x = 0
+			y += rowH
+			rowH = 0
+		}
+		if x+span > tracks {
+			x = 0
+			y += rowH
+			rowH = 0
+		}
+		w.X = x
+		w.Y = y
+		x += span
+		if h := normalizeH(w.H); h > rowH {
+			rowH = h
+		}
+	}
+}
+
+func spanOf(w float64) int {
+	span := int(math.Round(w * 2))
+	if span < 1 {
+		span = 1
+	}
+	return span
+}
+
+func normalizeH(h int) int {
+	if h < 1 {
+		return 1
+	}
+	if h > 6 {
+		return 6
+	}
+	return h
 }
 
 func (s *Store) Get() Config {
@@ -124,7 +179,15 @@ func (s *Store) Save(in Config) (Config, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	cols := in.Columns
+	if cols < 2 || cols > 12 {
+		cols = 6
+	}
+	if in.LayoutVersion < 2 {
+		packLayout(in.Widgets, cols)
+	}
 	c := sanitize(in, s.cfg.DeviceToken)
+	c.LayoutVersion = 2
 	c.Version = s.cfg.Version + 1
 	s.cfg = c
 	if err := s.persistLocked(); err != nil {
@@ -285,11 +348,25 @@ func sanitize(in Config, token string) Config {
 		if w.W > float64(out.Columns) {
 			w.W = float64(out.Columns)
 		}
-		if w.H < 1 {
-			w.H = 1
+		w.H = normalizeH(w.H)
+
+		tracks := out.Columns * 2
+		span := spanOf(w.W)
+		if span > tracks {
+			span = tracks
+			w.W = float64(tracks) / 2
 		}
-		if w.H > 6 {
-			w.H = 6
+		if w.X < 0 {
+			w.X = 0
+		}
+		if w.X+span > tracks {
+			w.X = tracks - span
+		}
+		if w.Y < 0 {
+			w.Y = 0
+		}
+		if w.Y > 200 {
+			w.Y = 200
 		}
 		if w.Limit < 1 {
 			w.Limit = 8

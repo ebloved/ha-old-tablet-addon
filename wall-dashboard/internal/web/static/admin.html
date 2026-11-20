@@ -73,6 +73,7 @@
   }
   .canvas .tile.selected { outline:2px solid var(--accent); outline-offset:-1px; }
   .canvas .tile.drop { outline:2px dashed var(--accent); outline-offset:-1px; }
+  .canvas .tile.overlap { outline:2px solid #e05d5d; outline-offset:-1px; }
   .canvas .tile.dragging { opacity:.45; }
   .canvas .tile.active { background:var(--t-card-active); border-color:var(--t-on); }
   .canvas .name { font-size:12px; line-height:1.25; letter-spacing:.04em; text-transform:uppercase; color:var(--t-muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
@@ -154,6 +155,7 @@
       <span class="spacer"></span>
       <span id="dirty"></span>
       <button id="add">+ Виджет</button>
+      <button id="pack">Упорядочить</button>
       <button id="save" class="primary">Сохранить</button>
     </div>
 
@@ -202,7 +204,6 @@
               <input id="e-h" type="number" min="1" max="6">
             </label>
           </div>
-          <label class="check"><input id="e-newrow" type="checkbox"> С новой строки</label>
           <div class="two">
             <button id="e-dup">Дублировать</button>
             <button id="e-del" class="danger">Удалить</button>
