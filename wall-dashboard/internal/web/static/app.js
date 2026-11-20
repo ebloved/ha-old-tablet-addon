@@ -33,6 +33,7 @@
   var es = null;
   var lastEvent = Date.now();
   var reloading = false;
+  var noTokenShown = false;
 
   function api(path, opts) {
     opts = opts || {};
@@ -276,12 +277,15 @@
         cfg = c;
         document.title = c.title || 'Home';
         render();
-        return loadStates();
+        return loadStates().then(function () {
+          return true;
+        });
       })
       .catch(function (e) {
         if (String(e.message) !== 'unauthorized') {
           toast('Нет связи с сервером');
         }
+        return false;
       });
   }
 
@@ -292,7 +296,7 @@
     if (es) {
       es.close();
     }
-    es = new EventSource('api/events?t=' + encodeURIComponent(token));
+    es = new EventSource('api/events' + (token ? '?t=' + encodeURIComponent(token) : ''));
     es.onopen = function () {
       dot.classList.add('on');
       lastEvent = Date.now();
@@ -401,6 +405,10 @@
   }
 
   function showNoToken() {
+    if (noTokenShown) {
+      return;
+    }
+    noTokenShown = true;
     var o = document.createElement('div');
     o.className = 'overlay';
     var p = document.createElement('div');
@@ -415,12 +423,11 @@
     document.body.appendChild(o);
   }
 
-  if (!token) {
-    showNoToken();
-    return;
-  }
-
-  loadConfig().then(connect);
+  loadConfig().then(function (ok) {
+    if (ok) {
+      connect();
+    }
+  });
 
   setInterval(function () {
     if (!reloading && Date.now() - lastEvent > 300000) {
@@ -438,7 +445,7 @@
   }, 60000);
 
   document.addEventListener('visibilitychange', function () {
-    if (!document.hidden && Date.now() - lastEvent > 60000) {
+    if (!document.hidden && cfg && Date.now() - lastEvent > 60000) {
       connect();
       loadStates();
       lastEvent = Date.now();

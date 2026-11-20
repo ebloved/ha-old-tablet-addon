@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"net/http"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -126,6 +127,7 @@ func (s *Server) index(w http.ResponseWriter, r *http.Request) {
 		adminLink = `<a class="admin" href="admin" title="Настройки">&#9881;</a>`
 	}
 	page = strings.ReplaceAll(page, "__ADMIN_LINK__", adminLink)
+	page = strings.ReplaceAll(page, "__V__", strconv.Itoa(s.cfg.Get().Version))
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-cache")
@@ -139,6 +141,7 @@ func (s *Server) adminPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	page := strings.ReplaceAll(string(b), "__BASE__", s.base(r))
+	page = strings.ReplaceAll(page, "__V__", strconv.Itoa(s.cfg.Get().Version))
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-cache")
 	_, _ = w.Write([]byte(page))
