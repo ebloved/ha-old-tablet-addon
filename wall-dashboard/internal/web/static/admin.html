@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<base href="__BASE__/">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Old Tablet Dashboard — admin</title>
+<style>
+  :root { --bg:#0f1318; --card:#171d25; --line:#26303c; --text:#e6edf5; --muted:#8b9bb0; --accent:#4aa8ff; --on:#6fc96b; --danger:#e05d5d; }
+  * { box-sizing: border-box; }
+  body { margin:0; padding:24px; background:var(--bg); color:var(--text); font:14px/1.45 -apple-system, "Helvetica Neue", Arial, sans-serif; }
+  h1 { font-size:20px; margin:0 0 4px; }
+  h2 { font-size:15px; margin:24px 0 10px; color:var(--muted); text-transform:uppercase; letter-spacing:.05em; }
+  .wrap { max-width:1100px; margin:0 auto; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:16px; }
+  .row { display:flex; flex-wrap:wrap; align-items:center; gap:10px; }
+  .muted { color:var(--muted); }
+  .dot { width:9px; height:9px; border-radius:50%; background:#3a4553; display:inline-block; margin-right:6px; }
+  .dot.on { background:var(--on); }
+  code { background:#0b0f14; border:1px solid var(--line); border-radius:7px; padding:3px 7px; font-size:12px; word-break:break-all; }
+  input, select, button { font:inherit; color:var(--text); background:#0d1218; border:1px solid var(--line); border-radius:8px; padding:7px 9px; }
+  input:focus, select:focus { outline:1px solid var(--accent); }
+  button { cursor:pointer; background:#1d2632; }
+  button:hover { background:#25313f; }
+  button.primary { background:#1f4d7a; border-color:#2a6da8; }
+  button.danger { background:#3a2020; border-color:#5a2a2a; color:#ffb4b4; }
+  button:disabled { opacity:.45; cursor:default; }
+  table { width:100%; border-collapse:collapse; }
+  th, td { text-align:left; padding:6px 6px; border-bottom:1px solid var(--line); vertical-align:middle; }
+  th { color:var(--muted); font-weight:500; font-size:12px; text-transform:uppercase; letter-spacing:.04em; }
+  td input, td select { width:100%; }
+  td.num input { width:56px; }
+  td.actions { white-space:nowrap; width:1%; }
+  td.actions button { padding:5px 8px; margin-left:4px; }
+  .warn { margin-top:10px; color:#e8c07a; font-size:13px; }
+  .ok { color:var(--on); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Old Tablet Dashboard</h1>
+  <div class="muted">Лёгкий дашборд для старых iPad. Планшет ходит на отдельный порт, админка живёт внутри Home Assistant.</div>
+
+  <h2>Состояние</h2>
+  <div class="card">
+    <div class="row">
+      <span><span id="ha-dot" class="dot"></span><span id="ha-status">проверка…</span></span>
+      <span class="muted" id="ha-entities"></span>
+      <span class="muted" id="cfg-version"></span>
+    </div>
+  </div>
+
+  <h2>Планшет</h2>
+  <div class="card">
+    <div class="row" style="margin-bottom:10px;">
+      <span class="muted">Ссылка:</span>
+      <code id="tablet-url">—</code>
+    </div>
+    <div class="row">
+      <span class="muted">Токен:</span>
+      <code id="token">—</code>
+      <button id="regen" class="danger">Новый токен</button>
+    </div>
+    <div class="warn">Откройте ссылку в Safari на iPad → «Поделиться» → «На экран Домой». Затем: Автозаблокировка → Никогда. Токен не публикуйте: он даёт управление устройствами в LAN.</div>
+  </div>
+
+  <h2>Виджеты</h2>
+  <div class="card">
+    <div class="row" style="margin-bottom:10px;">
+      <label class="muted">Заголовок <input id="title" style="width:220px;margin-left:6px;"></label>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th style="width:110px;">Тип</th>
+          <th>Сущность</th>
+          <th style="width:150px;">Подпись</th>
+          <th>RSS-лента</th>
+          <th style="width:70px;">Записей</th>
+          <th style="width:64px;">Ш</th>
+          <th style="width:64px;">В</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody id="widgets"></tbody>
+    </table>
+    <datalist id="entity-list"></datalist>
+    <div class="row" style="margin-top:12px;">
+      <button id="add">+ Добавить</button>
+      <button id="save" class="primary">Сохранить</button>
+      <span class="muted" id="save-status"></span>
+    </div>
+  </div>
+</div>
+<script src="admin.js"></script>
+</body>
+</html>

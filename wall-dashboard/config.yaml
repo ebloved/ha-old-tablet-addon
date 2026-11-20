@@ -1,0 +1,36 @@
+name: Old Tablet Dashboard
+version: "0.1.0"
+slug: old_tablet_dashboard
+description: Lightweight Home Assistant dashboard for old tablets (iOS 12 / Safari 12)
+url: https://github.com/ebloved/ha-old-tablet-addon/tree/main/wall-dashboard
+arch:
+  - amd64
+  - aarch64
+  - armv7
+startup: application
+boot: auto
+init: false
+
+homeassistant_api: true
+hassio_api: true
+
+ingress: true
+ingress_port: 8080
+panel_icon: mdi:tablet-dashboard
+panel_title: Old Tablet
+panel_admin: true
+
+ports:
+  "8088/tcp": 8088
+ports_description:
+  "8088/tcp": Tablet UI (direct, token protected)
+
+options:
+  rss_refresh: 600
+  log_level: info
+schema:
+  rss_refresh: int(60,86400)
+  log_level: list(debug|info|warn|error)
+
+watchdog: http://[HOST]:[PORT:8080]/healthz
+backup: cold

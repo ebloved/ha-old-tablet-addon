@@ -1,0 +1,6 @@
+.env
+.dash-data/
+data/
+*.db
+wall-dashboard/dash
+.DS_Store
