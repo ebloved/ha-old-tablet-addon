@@ -395,13 +395,16 @@
       var state = info ? info.state : '—';
       var domain = (w.entity || '').split('.')[0];
       var isAction = !!ACTION_DOMAINS[domain];
+      if (isAction) {
+        tile.classList.add('is-action');
+      }
       var name = document.createElement('div');
       name.className = 'name';
       name.textContent = autoName(w);
       var value = document.createElement('div');
       value.className = 'value';
       if (isAction) {
-        value.textContent = 'Run';
+        value.textContent = w.name || autoName(w);
       } else if (w.type === 'sensor') {
         value.textContent = state;
       } else if (state === 'on') {

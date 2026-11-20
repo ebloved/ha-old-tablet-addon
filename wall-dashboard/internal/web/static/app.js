@@ -219,6 +219,12 @@
       return node;
     }
 
+    var domain = (w.entity || '').split('.')[0];
+    var isAction = !!ACTION_DOMAINS[domain];
+    if (isAction) {
+      node.classList.add('is-action');
+    }
+
     var n = document.createElement('div');
     n.className = 'name';
     n.textContent = friendly(w);
@@ -234,7 +240,11 @@
     node.appendChild(v);
     node.appendChild(sub);
 
-    if (w.type === 'entity' && w.entity) {
+    if (isAction) {
+      node.addEventListener('click', function () {
+        act(w.entity, defaultService(w.entity, entityState(w.entity)));
+      });
+    } else if (w.type === 'entity' && w.entity) {
       node.addEventListener('click', function () {
         toggle(w);
       });
@@ -287,10 +297,10 @@
     }
 
     if (ACTION_DOMAINS[domain]) {
-      valueEl.textContent = 'Run';
+      valueEl.textContent = friendly(w) || 'Run';
       node.classList.remove('active');
       if (subEl) {
-        subEl.textContent = relTime(st.attributes && st.attributes.last_triggered);
+        subEl.textContent = '';
       }
       return;
     }

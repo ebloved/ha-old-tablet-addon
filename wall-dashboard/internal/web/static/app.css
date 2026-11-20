@@ -259,6 +259,25 @@ main {
   bottom: 14px;
 }
 
+.tile.is-action {
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+}
+
+.tile.is-action .name,
+.tile.is-action .sub {
+  display: none;
+}
+
+.tile.is-action .value {
+  font-size: 18px;
+  line-height: 1.25;
+  white-space: normal;
+  word-break: break-word;
+  max-height: 100%;
+}
+
 .t-spacer {
   background: transparent;
   border-color: transparent;

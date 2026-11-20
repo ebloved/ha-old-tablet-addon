@@ -145,7 +145,8 @@ docker build --build-arg BUILD_FROM=ghcr.io/home-assistant/amd64-base:3.20 \
 Виджет `entity` работает и с action-сущностями. Тап по плитке вызывает
 `script.turn_on`, `scene.turn_on`, `button.press` или `input_button.press`;
 для света и прочего — `toggle`, для штор — `open_cover`/`close_cover`.
-На плитке показывается «Run» и время последнего запуска.
+На такой плитке крупно по центру показывается её надпись (поле «Надпись»
+в инспекторе, по умолчанию — friendly name), а серое имя в углу скрыто.
 
 ## Автоматизация темы
 

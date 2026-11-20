@@ -76,6 +76,9 @@
   .canvas .tile.overlap { outline:2px solid #e05d5d; outline-offset:-1px; }
   .canvas .tile.dragging { opacity:.45; }
   .canvas .tile.active { background:var(--t-card-active); border-color:var(--t-on); }
+  .canvas .tile.is-action { justify-content:center; align-items:center; text-align:center; }
+  .canvas .tile.is-action .name, .canvas .tile.is-action .sub { display:none; }
+  .canvas .tile.is-action .value { font-size:18px; line-height:1.25; white-space:normal; word-break:break-word; max-height:100%; }
   .canvas .name { font-size:12px; line-height:1.25; letter-spacing:.04em; text-transform:uppercase; color:var(--t-muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .canvas .value { font-size:26px; line-height:1.1; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .canvas .sub { font-size:11px; color:var(--t-muted); min-height:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
@@ -184,8 +187,8 @@
           <label>Сущность
             <input id="e-entity" list="entity-list" placeholder="light.kitchen">
           </label>
-          <label>Подпись
-            <input id="e-name" placeholder="Kitchen">
+          <label>Надпись
+            <input id="e-name" placeholder="Утро">
           </label>
           <label>RSS-лента
             <input id="e-feed" placeholder="https://example.com/feed.xml">

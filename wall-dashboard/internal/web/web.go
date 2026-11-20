@@ -2,8 +2,10 @@ package web
 
 import (
 	"context"
+	"crypto/sha256"
 	"crypto/subtle"
 	"embed"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"html"
@@ -25,6 +27,20 @@ import (
 
 //go:embed static/*
 var staticFS embed.FS
+
+// assetVersion busts caches whenever any embedded asset changes. It must not
+// depend on the config version: updating the add-on does not touch the config,
+// and iOS Safari happily serves a stale app.js otherwise.
+var assetVersion = func() string {
+	h := sha256.New()
+	for _, name := range []string{"static/app.js", "static/app.css", "static/admin.js"} {
+		b, err := staticFS.ReadFile(name)
+		if err == nil {
+			_, _ = h.Write(b)
+		}
+	}
+	return hex.EncodeToString(h.Sum(nil))[:10]
+}()
 
 type Server struct {
 	cfg     *config.Store
@@ -119,7 +135,7 @@ func staticFile(name, contentType string) http.HandlerFunc {
 			return
 		}
 		w.Header().Set("Content-Type", contentType)
-		w.Header().Set("Cache-Control", "no-cache")
+		w.Header().Set("Cache-Control", "no-store")
 		_, _ = w.Write(b)
 	}
 }
@@ -147,13 +163,13 @@ func (s *Server) index(w http.ResponseWriter, r *http.Request) {
 		adminLink = `<a class="admin" href="admin" title="Настройки">&#9881;</a>`
 	}
 	page = strings.ReplaceAll(page, "__ADMIN_LINK__", adminLink)
-	page = strings.ReplaceAll(page, "__V__", strconv.Itoa(s.cfg.Get().Version))
+	page = strings.ReplaceAll(page, "__V__", assetVersion)
 	c := s.cfg.Get()
 	page = strings.ReplaceAll(page, "__THEME__", c.Theme)
 	page = strings.ReplaceAll(page, "__TRACKS__", strconv.Itoa(c.Columns*2))
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Cache-Control", "no-store")
 	_, _ = w.Write([]byte(page))
 }
 
@@ -164,9 +180,9 @@ func (s *Server) adminPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	page := strings.ReplaceAll(string(b), "__BASE__", s.base(r))
-	page = strings.ReplaceAll(page, "__V__", strconv.Itoa(s.cfg.Get().Version))
+	page = strings.ReplaceAll(page, "__V__", assetVersion)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Cache-Control", "no-store")
 	_, _ = w.Write([]byte(page))
 }
 
