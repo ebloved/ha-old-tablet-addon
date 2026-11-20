@@ -23,4 +23,8 @@ FROM ${BUILD_FROM}
 COPY --from=build /out/dash /usr/bin/dash
 RUN chmod +x /usr/bin/dash
 
+# The HA base image uses s6-overlay as ENTRYPOINT and filters the container
+# environment for legacy services, so SUPERVISOR_TOKEN would be empty. A plain
+# static binary must inherit the Docker environment directly.
+ENTRYPOINT []
 CMD [ "/usr/bin/dash" ]

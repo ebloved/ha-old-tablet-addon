@@ -83,3 +83,11 @@ docker build --build-arg BUILD_FROM=ghcr.io/home-assistant/amd64-base:3.20 \
   выключается вручную, а страница сама перезагружается ночью и при мёртвом SSE.
 - HTTPS не используется на порту планшета: это LAN. Если нужен TLS — ставьте
   перед аддоном reverse proxy.
+
+## Если в логе `SUPERVISOR_TOKEN is empty`
+
+Базовый образ Home Assistant запускается через s6-overlay, а s6 не прокидывает
+переменные окружения контейнера в legacy-сервисы. Поэтому в `Dockerfile` стоит
+`ENTRYPOINT []`: бинарник стартует напрямую и видит `SUPERVISOR_TOKEN`. Если
+форкаете образ — не убирайте эту строку и не возвращайте s6 в качестве
+entrypoint.

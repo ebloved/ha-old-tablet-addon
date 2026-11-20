@@ -22,17 +22,18 @@ import (
 var staticFS embed.FS
 
 type Server struct {
-	cfg *config.Store
-	ha  *ha.Client
-	rss *rss.Cache
-	log *slog.Logger
+	cfg     *config.Store
+	ha      *ha.Client
+	rss     *rss.Cache
+	log     *slog.Logger
+	ingress bool
 }
 
-func New(cfg *config.Store, hac *ha.Client, rc *rss.Cache, log *slog.Logger) *Server {
-	return &Server{cfg: cfg, ha: hac, rss: rc, log: log}
+func New(cfg *config.Store, hac *ha.Client, rc *rss.Cache, log *slog.Logger, ingress bool) *Server {
+	return &Server{cfg: cfg, ha: hac, rss: rc, log: log, ingress: ingress}
 }
 
-func (s *Server) Handler(admin bool) http.Handler {
+func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
@@ -68,7 +69,7 @@ func (s *Server) Handler(admin bool) http.Handler {
 	mux.HandleFunc("POST /api/action", s.auth(s.action))
 	mux.HandleFunc("GET /api/rss", s.auth(s.feed))
 
-	if admin {
+	if s.ingress {
 		mux.HandleFunc("GET /admin", s.adminPage)
 		mux.HandleFunc("GET /admin.js", staticFile("admin.js", "application/javascript; charset=utf-8"))
 		mux.HandleFunc("GET /api/admin/config", s.adminJSON(func(w http.ResponseWriter, r *http.Request) {
@@ -120,6 +121,11 @@ func (s *Server) index(w http.ResponseWriter, r *http.Request) {
 	page := string(b)
 	page = strings.ReplaceAll(page, "__BASE__", s.base(r))
 	page = strings.ReplaceAll(page, "__TITLE__", html.EscapeString(s.cfg.Get().Title))
+	adminLink := ""
+	if s.ingress {
+		adminLink = `<a class="admin" href="admin" title="Настройки">&#9881;</a>`
+	}
+	page = strings.ReplaceAll(page, "__ADMIN_LINK__", adminLink)
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-cache")
@@ -140,6 +146,12 @@ func (s *Server) adminPage(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) auth(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		// Behind ingress the request is already authenticated by Home Assistant,
+		// so the panel and its API work without a device token.
+		if s.ingress {
+			next(w, r)
+			return
+		}
 		tok := r.Header.Get("X-Dash-Token")
 		if tok == "" {
 			tok = r.URL.Query().Get("t")

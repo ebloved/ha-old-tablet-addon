@@ -52,6 +52,11 @@ func main() {
 		base = "http://supervisor/core"
 	}
 
+	log.Info("starting", "ha_base", base, "token_set", token != "", "data_dir", dataDir)
+	if token == "" {
+		log.Error("SUPERVISOR_TOKEN is empty: the add-on is not seeing the container environment; check that the image starts the binary directly (no s6 /init)")
+	}
+
 	hac := ha.New(base, token, log)
 	feeds := rss.New(time.Duration(opts.RSSRefresh)*time.Second, log)
 
@@ -65,12 +70,12 @@ func main() {
 
 	ingress := &http.Server{
 		Addr:              ingressAddr,
-		Handler:           web.New(store, hac, feeds, log).Handler(true),
+		Handler:           web.New(store, hac, feeds, log, true).Handler(),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 	tablet := &http.Server{
 		Addr:              tabletAddr,
-		Handler:           web.New(store, hac, feeds, log).Handler(false),
+		Handler:           web.New(store, hac, feeds, log, false).Handler(),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 

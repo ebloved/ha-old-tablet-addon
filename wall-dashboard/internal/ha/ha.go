@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -13,6 +14,8 @@ import (
 
 	"github.com/gorilla/websocket"
 )
+
+var errAuthInvalid = errors.New("access token rejected")
 
 type State struct {
 	EntityID    string         `json:"entity_id"`
@@ -167,16 +170,27 @@ type wsMsg struct {
 }
 
 func (c *Client) session(ctx context.Context) error {
-	var conn *websocket.Conn
-	var err error
+	var failures []string
 	for _, u := range c.wsURL {
-		conn, _, err = websocket.DefaultDialer.DialContext(ctx, u, nil)
+		connected, err := c.runOnce(ctx, u)
 		if err == nil {
+			return nil
+		}
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		failures = append(failures, u+": "+err.Error())
+		if connected {
 			break
 		}
 	}
-	if conn == nil {
-		return err
+	return errors.New(strings.Join(failures, " | "))
+}
+
+func (c *Client) runOnce(ctx context.Context, url string) (bool, error) {
+	conn, _, err := websocket.DefaultDialer.DialContext(ctx, url, nil)
+	if err != nil {
+		return false, err
 	}
 	defer conn.Close()
 
@@ -213,7 +227,7 @@ func (c *Client) session(ctx context.Context) error {
 	for {
 		_, data, err := conn.ReadMessage()
 		if err != nil {
-			return err
+			return authed, err
 		}
 		_ = conn.SetReadDeadline(time.Now().Add(75 * time.Second))
 
@@ -228,21 +242,21 @@ func (c *Client) session(ctx context.Context) error {
 				"type":         "auth",
 				"access_token": c.token,
 			}); err != nil {
-				return err
+				return authed, err
 			}
 		case "auth_invalid":
-			return fmt.Errorf("home assistant rejected the token")
+			return authed, errAuthInvalid
 		case "auth_ok":
 			authed = true
 			c.setConnected(true)
-			c.log.Info("ha websocket connected")
+			c.log.Info("ha websocket connected", "url", url)
 			if err := c.writeJSON(conn, map[string]any{"id": 1, "type": "get_states"}); err != nil {
-				return err
+				return authed, err
 			}
 			if err := c.writeJSON(conn, map[string]any{
 				"id": 2, "type": "subscribe_events", "event_type": "state_changed",
 			}); err != nil {
-				return err
+				return authed, err
 			}
 		case "result":
 			if m.ID == 1 && authed {
