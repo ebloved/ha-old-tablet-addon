@@ -53,7 +53,7 @@
     position:absolute; left:0; top:0; right:0; bottom:0;
     padding:10px;
     display:grid;
-    grid-template-columns:repeat(var(--cols,6), minmax(0,1fr));
+    grid-template-columns:repeat(var(--tracks,12), minmax(0,1fr));
     grid-auto-rows:92px;
     gap:9px;
     align-content:start;
@@ -100,6 +100,11 @@
   .two { display:flex; }
   .two > * { flex:1; margin-right:8px; }
   .two > *:last-child { margin-right:0; }
+  .check { display:flex; align-items:center; }
+  .check input { width:auto; margin:0 8px 0 0; }
+
+  .canvas .t-spacer { background:transparent; border:1px dashed var(--t-border); }
+  .canvas .spacer-prev { position:absolute; left:0; top:0; right:0; bottom:0; display:flex; align-items:center; justify-content:center; color:var(--t-muted); font-size:11px; }
 </style>
 </head>
 <body>
@@ -171,6 +176,7 @@
               <option value="weather">weather</option>
               <option value="alerts">alerts</option>
               <option value="camera">camera</option>
+              <option value="spacer">spacer</option>
             </select>
           </label>
           <label>Сущность
@@ -190,12 +196,13 @@
           </label>
           <div class="two">
             <label>Ширина
-              <input id="e-w" type="number" min="1" max="12">
+              <input id="e-w" type="number" min="0.5" max="12" step="0.5">
             </label>
             <label>Высота
               <input id="e-h" type="number" min="1" max="6">
             </label>
           </div>
+          <label class="check"><input id="e-newrow" type="checkbox"> С новой строки</label>
           <div class="two">
             <button id="e-dup">Дублировать</button>
             <button id="e-del" class="danger">Удалить</button>

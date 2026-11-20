@@ -174,7 +174,7 @@
 
   function applyCanvasTheme() {
     $('canvas').className = 'canvas theme-' + (cfg.theme === 'light' ? 'light' : 'dark');
-    $('canvas').style.setProperty('--cols', cfg.columns);
+    $('canvas').style.setProperty('--tracks', cfg.columns * 2);
   }
 
   function fitStage() {
@@ -209,17 +209,28 @@
     }
   }
 
+  function applySpan(el, w) {
+    var tracks = cfg.columns * 2;
+    var span = Math.max(1, Math.min(tracks, Math.round((w.w || 1) * 2)));
+    el.style.gridColumn = (w.new_row ? '1 / span ' : 'span ') + span;
+  }
+
   function makeTile(w, i) {
     var tile = document.createElement('div');
     tile.className = 'tile t-' + (w.type || 'entity');
-    tile.style.gridColumn = 'span ' + Math.min(w.w || 1, cfg.columns);
+    applySpan(tile, w);
     tile.style.gridRow = 'span ' + Math.min(w.h || 1, 6);
     tile.setAttribute('draggable', 'true');
     if (i === selected) {
       tile.classList.add('selected');
     }
 
-    if (w.type === 'clock') {
+    if (w.type === 'spacer') {
+      var sp = document.createElement('div');
+      sp.className = 'spacer-prev';
+      sp.textContent = 'пусто';
+      tile.appendChild(sp);
+    } else if (w.type === 'clock') {
       var cn = document.createElement('div');
       cn.className = 'name';
       cn.textContent = w.name || '';
@@ -424,6 +435,7 @@
     setVal('e-interval', w.interval || 3);
     setVal('e-w', w.w || 1);
     setVal('e-h', w.h || 1);
+    $('e-newrow').checked = !!w.new_row;
     applyFieldState();
   }
 
@@ -439,11 +451,12 @@
     if (!w) {
       return;
     }
-    $('e-entity').disabled = w.type === 'rss' || w.type === 'clock';
+    $('e-entity').disabled = w.type === 'rss' || w.type === 'clock' || w.type === 'spacer';
     $('e-entity').placeholder = w.type === 'alerts' ? 'необязательно: sensor.alerts' : 'light.kitchen';
     $('e-feed').disabled = w.type !== 'rss';
     $('e-limit').disabled = w.type !== 'rss';
     $('e-interval').disabled = w.type !== 'camera';
+    $('e-w').max = cfg.columns;
   }
 
   function startResize(ev, i) {
@@ -467,7 +480,8 @@
     var cs = getComputedStyle(canvas);
     var gap = parseFloat(cs.columnGap) || 9;
     var pad = (parseFloat(cs.paddingLeft) || 0) + (parseFloat(cs.paddingRight) || 0);
-    var cellW = (canvas.clientWidth - pad - gap * (cfg.columns - 1)) / cfg.columns + gap;
+    var tracks = cfg.columns * 2;
+    var cellW = (canvas.clientWidth - pad - gap * (tracks - 1)) / tracks + gap;
     var rowH = 92 + gap;
 
     resizing = true;
@@ -480,12 +494,13 @@
       if (e.cancelable) {
         e.preventDefault();
       }
-      var nw = clamp(startW + Math.round((p.clientX - startX) / cellW), 1, cfg.columns);
+      var nw = clamp(startW + Math.round((p.clientX - startX) / cellW) * 0.5, 0.5, cfg.columns);
+      nw = Math.round(nw * 2) / 2;
       var nh = clamp(startH + Math.round((p.clientY - startY) / rowH), 1, 6);
       if (nw !== w.w || nh !== w.h) {
         w.w = nw;
         w.h = nh;
-        tile.style.gridColumn = 'span ' + nw;
+        applySpan(tile, w);
         tile.style.gridRow = 'span ' + nh;
         $('e-w').value = nw;
         $('e-h').value = nh;
@@ -523,7 +538,7 @@
   }
 
   function addWidget() {
-    cfg.widgets.push({ id: '', type: 'entity', entity: '', name: '', interval: 3, w: 2, h: 1 });
+    cfg.widgets.push({ id: '', type: 'entity', entity: '', name: '', interval: 3, new_row: false, w: 2, h: 1 });
     selected = cfg.widgets.length - 1;
     markDirty();
     renderAll();
@@ -737,8 +752,22 @@
     if (!w) {
       return;
     }
-    w.w = clamp(parseInt(this.value, 10) || 1, 1, cfg.columns);
+    var v = parseFloat(this.value);
+    if (isNaN(v)) {
+      v = 1;
+    }
+    w.w = Math.round(clamp(v, 0.5, cfg.columns) * 2) / 2;
     this.value = w.w;
+    markDirty();
+    rerenderCanvas();
+  });
+
+  $('e-newrow').addEventListener('change', function () {
+    var w = cfg.widgets[selected];
+    if (!w) {
+      return;
+    }
+    w.new_row = this.checked;
     markDirty();
     rerenderCanvas();
   });

@@ -150,7 +150,7 @@ func (s *Server) index(w http.ResponseWriter, r *http.Request) {
 	page = strings.ReplaceAll(page, "__V__", strconv.Itoa(s.cfg.Get().Version))
 	c := s.cfg.Get()
 	page = strings.ReplaceAll(page, "__THEME__", c.Theme)
-	page = strings.ReplaceAll(page, "__COLS__", strconv.Itoa(c.Columns))
+	page = strings.ReplaceAll(page, "__TRACKS__", strconv.Itoa(c.Columns*2))
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-cache")

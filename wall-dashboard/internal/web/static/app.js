@@ -137,11 +137,19 @@
   function buildTile(w) {
     var node = document.createElement('div');
     node.className = 'tile t-' + w.type;
+    var tracks = (cfg.columns || 6) * 2;
     if (w.w) {
-      node.style.gridColumn = 'span ' + Math.min(cfg.columns || 6, w.w);
+      var span = Math.max(1, Math.min(tracks, Math.round(w.w * 2)));
+      node.style.gridColumn = (w.new_row ? '1 / span ' : 'span ') + span;
+    } else if (w.new_row) {
+      node.style.gridColumnStart = '1';
     }
     if (w.h) {
       node.style.gridRow = 'span ' + Math.min(6, w.h);
+    }
+
+    if (w.type === 'spacer') {
+      return node;
     }
 
     if (w.type === 'clock') {
@@ -456,7 +464,7 @@
         cfg = c;
         document.title = c.title || 'Home';
         document.body.className = 'theme-' + (c.theme === 'light' ? 'light' : 'dark');
-        grid.style.setProperty('--cols', c.columns || 6);
+        grid.style.setProperty('--tracks', (c.columns || 6) * 2);
         render();
         loadAlerts();
         return loadStates().then(function () {

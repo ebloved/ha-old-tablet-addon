@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -22,18 +23,20 @@ var allowedTypes = map[string]bool{
 	"weather": true,
 	"alerts":  true,
 	"camera":  true,
+	"spacer":  true,
 }
 
 type Widget struct {
-	ID       string `json:"id"`
-	Type     string `json:"type"`
-	Entity   string `json:"entity,omitempty"`
-	Name     string `json:"name,omitempty"`
-	Feed     string `json:"feed,omitempty"`
-	Limit    int    `json:"limit,omitempty"`
-	Interval int    `json:"interval,omitempty"`
-	W        int    `json:"w,omitempty"`
-	H        int    `json:"h,omitempty"`
+	ID       string  `json:"id"`
+	Type     string  `json:"type"`
+	Entity   string  `json:"entity,omitempty"`
+	Name     string  `json:"name,omitempty"`
+	Feed     string  `json:"feed,omitempty"`
+	Limit    int     `json:"limit,omitempty"`
+	Interval int     `json:"interval,omitempty"`
+	W        float64 `json:"w,omitempty"`
+	H        int     `json:"h,omitempty"`
+	NewRow   bool    `json:"new_row,omitempty"`
 }
 
 type Config struct {
@@ -275,11 +278,12 @@ func sanitize(in Config, token string) Config {
 		}
 		seen[w.ID] = true
 
-		if w.W < 1 {
+		w.W = math.Round(w.W*2) / 2
+		if w.W < 0.5 {
 			w.W = 1
 		}
-		if w.W > out.Columns {
-			w.W = out.Columns
+		if w.W > float64(out.Columns) {
+			w.W = float64(out.Columns)
 		}
 		if w.H < 1 {
 			w.H = 1
