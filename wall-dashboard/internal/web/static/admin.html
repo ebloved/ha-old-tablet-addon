@@ -18,6 +18,9 @@
   .dot { width:9px; height:9px; border-radius:50%; background:#3a4553; display:inline-block; margin-right:6px; }
   .dot.on { background:var(--on); }
   code { background:#0b0f14; border:1px solid var(--line); border-radius:7px; padding:3px 7px; font-size:12px; word-break:break-all; }
+  .qr-row { display:flex; align-items:flex-start; flex-wrap:wrap; }
+  .qr { width:180px; height:180px; background:#fff; border-radius:10px; padding:6px; margin-right:18px; flex:0 0 auto; }
+  .qr-side { flex:1 1 320px; min-width:260px; }
   input, select, button { font:inherit; color:var(--text); background:#0d1218; border:1px solid var(--line); border-radius:8px; padding:7px 9px; }
   input:focus, select:focus { outline:1px solid var(--accent); }
   button { cursor:pointer; background:#1d2632; }
@@ -52,16 +55,25 @@
 
   <h2>Планшет</h2>
   <div class="card">
-    <div class="row" style="margin-bottom:10px;">
-      <span class="muted">Ссылка:</span>
-      <code id="tablet-url">—</code>
+    <div class="qr-row">
+      <img id="qr" class="qr" alt="QR для планшета">
+      <div class="qr-side">
+        <div class="row" style="margin-bottom:10px;">
+          <span class="muted">Адрес HA:</span>
+          <input id="host" style="width:220px;" placeholder="homeassistant.local">
+        </div>
+        <div class="row" style="margin-bottom:10px;">
+          <span class="muted">Ссылка:</span>
+          <code id="tablet-url">—</code>
+        </div>
+        <div class="row">
+          <span class="muted">Токен:</span>
+          <code id="token">—</code>
+          <button id="regen" class="danger">Новый токен</button>
+        </div>
+      </div>
     </div>
-    <div class="row">
-      <span class="muted">Токен:</span>
-      <code id="token">—</code>
-      <button id="regen" class="danger">Новый токен</button>
-    </div>
-    <div class="warn">Откройте ссылку в Safari на iPad → «Поделиться» → «На экран Домой». Затем: Автозаблокировка → Никогда. Токен не публикуйте: он даёт управление устройствами в LAN.</div>
+    <div class="warn">Наведите камеру iPad на QR — Safari откроет дашборд. Дальше «Поделиться» → «На экран Домой», Автозаблокировка → Никогда. Токен не публикуйте: он даёт управление устройствами в LAN.</div>
   </div>
 
   <h2>Виджеты</h2>

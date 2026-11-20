@@ -31,6 +31,9 @@
       .then(function (res) {
         cfg = res[0];
         states = res[2] || [];
+        if (!$('host').value) {
+          $('host').value = location.hostname || 'homeassistant.local';
+        }
         renderStatus(res[1]);
         renderTablet();
         renderWidgets();
@@ -47,14 +50,29 @@
     $('cfg-version').textContent = 'конфиг v' + st.version;
   }
 
-  function tabletURL(token) {
-    var host = location.hostname || 'homeassistant.local';
-    return 'http://' + host + ':8088/?t=' + encodeURIComponent(token);
+  function tabletHost() {
+    var h = ($('host').value || '')
+      .replace(/^https?:\/\//, '')
+      .replace(/\/.*$/, '')
+      .replace(/:.*$/, '')
+      .trim();
+    return h || 'homeassistant.local';
   }
 
   function renderTablet() {
+    var host = tabletHost();
     $('token').textContent = cfg.device_token || '—';
-    $('tablet-url').textContent = cfg.device_token ? tabletURL(cfg.device_token) : '—';
+    if (!cfg.device_token) {
+      $('tablet-url').textContent = '—';
+      $('qr').removeAttribute('src');
+      return;
+    }
+    $('tablet-url').textContent = 'http://' + host + ':8088/?t=' + cfg.device_token;
+    $('qr').src =
+      'api/admin/qr?host=' +
+      encodeURIComponent(host) +
+      '&v=' +
+      encodeURIComponent(cfg.device_token.slice(0, 8));
   }
 
   function makeRow(w, index) {
@@ -214,6 +232,7 @@
   $('save').addEventListener('click', save);
   $('add').addEventListener('click', add);
   $('regen').addEventListener('click', regen);
+  $('host').addEventListener('change', renderTablet);
 
   load();
   setInterval(function () {

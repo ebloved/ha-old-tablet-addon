@@ -9,10 +9,13 @@ import (
 	"html"
 	"log/slog"
 	"net/http"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/skip2/go-qrcode"
 
 	"oldtabletdash/internal/config"
 	"oldtabletdash/internal/ha"
@@ -78,6 +81,7 @@ func (s *Server) Handler() http.Handler {
 		}))
 		mux.HandleFunc("PUT /api/admin/config", s.adminJSON(s.saveConfig))
 		mux.HandleFunc("POST /api/admin/token", s.adminJSON(s.regenToken))
+		mux.HandleFunc("GET /api/admin/qr", s.qr)
 		mux.HandleFunc("GET /api/admin/states", s.adminJSON(s.entityList))
 		mux.HandleFunc("GET /api/admin/status", s.adminJSON(func(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusOK, map[string]any{
@@ -346,6 +350,33 @@ func (s *Server) feed(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"items": items})
+}
+
+var hostRe = regexp.MustCompile(`^[A-Za-z0-9.\-]+$`)
+
+func (s *Server) qr(w http.ResponseWriter, r *http.Request) {
+	host := strings.TrimSpace(r.URL.Query().Get("host"))
+	host = strings.TrimPrefix(host, "http://")
+	host = strings.TrimPrefix(host, "https://")
+	if i := strings.IndexByte(host, '/'); i >= 0 {
+		host = host[:i]
+	}
+	if i := strings.IndexByte(host, ':'); i >= 0 {
+		host = host[:i]
+	}
+	if host == "" || !hostRe.MatchString(host) {
+		host = "homeassistant.local"
+	}
+
+	link := "http://" + host + ":8088/?t=" + s.cfg.Get().DeviceToken
+	png, err := qrcode.Encode(link, qrcode.Medium, 360)
+	if err != nil {
+		http.Error(w, "qr failed", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "image/png")
+	w.Header().Set("Cache-Control", "no-store")
+	_, _ = w.Write(png)
 }
 
 func (s *Server) saveConfig(w http.ResponseWriter, r *http.Request) {
