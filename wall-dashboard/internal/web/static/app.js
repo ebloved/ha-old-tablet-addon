@@ -640,14 +640,16 @@
           }
           list.innerHTML = '';
           var items = d.items || [];
+          list.className = 'rss' + (items.length === 1 ? ' single' : '');
           if (!items.length) {
             list.textContent = 'Пусто';
             return;
           }
           for (var i = 0; i < items.length; i++) {
             var it = items[i];
+            var hasImg = !!(w.images && it.image);
             var a = document.createElement('a');
-            a.className = 'rss-item';
+            a.className = 'rss-item' + (hasImg ? ' has-img' : '');
             a.href = it.link || '#';
             a.target = '_blank';
             a.rel = 'noopener noreferrer';
@@ -660,7 +662,11 @@
             meta.className = 'rss-meta';
             meta.textContent = [it.source, shortDate(it.published)].filter(Boolean).join(' · ');
 
-            if (w.images && it.image) {
+            if (hasImg && (it.title === 'Фото' || it.title === 'Видео')) {
+              title.style.display = 'none';
+            }
+
+            if (hasImg) {
               var img = document.createElement('img');
               img.className = 'rss-img';
               img.alt = '';

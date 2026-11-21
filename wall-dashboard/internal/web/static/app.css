@@ -156,6 +156,7 @@ main {
 
 .t-rss {
   justify-content: flex-start;
+  overflow: visible;
 }
 
 .t-weather .value {
@@ -286,10 +287,11 @@ main {
 .rss {
   margin-top: 8px;
   overflow-x: hidden;
-  overflow-y: auto;
+  overflow-y: scroll;
   min-height: 0;
   flex: 1 1 auto;
   -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
 }
 
 .rss-item {
@@ -307,18 +309,64 @@ main {
 }
 
 .rss-img {
-  width: 54px;
-  height: 54px;
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 240px;
   object-fit: cover;
-  border-radius: 8px;
-  margin-right: 8px;
-  flex: 0 0 auto;
+  border-radius: 0;
   background: #000;
 }
 
 .rss-item:first-child {
   border-top: 0;
   padding-top: 0;
+}
+
+.rss-item.has-img {
+  display: block;
+  position: relative;
+  padding: 0;
+  border: 0;
+  margin-bottom: 8px;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #000;
+}
+
+.rss-item.has-img .rss-text {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 18px 8px 6px;
+  background: linear-gradient(to bottom, rgba(0, 0, 0, 0), rgba(0, 0, 0, 0.75));
+  color: #fff;
+}
+
+.rss-item.has-img .rss-title {
+  color: #fff;
+}
+
+.rss-item.has-img .rss-meta {
+  color: rgba(255, 255, 255, 0.75);
+}
+
+.rss.single {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.rss.single .rss-item {
+  flex: 1 1 auto;
+  min-height: 0;
+  margin-bottom: 0;
+}
+
+.rss.single .rss-item.has-img .rss-img {
+  height: 100%;
+  max-height: none;
 }
 
 .rss-title {

@@ -975,7 +975,7 @@
     if (!w) {
       return;
     }
-    w.limit = clamp(parseInt(this.value, 10) || 8, 3, 30);
+    w.limit = clamp(parseInt(this.value, 10) || 8, 1, 30);
     this.value = w.limit;
     markDirty();
   });
