@@ -660,8 +660,22 @@
             meta.className = 'rss-meta';
             meta.textContent = [it.source, shortDate(it.published)].filter(Boolean).join(' · ');
 
-            a.appendChild(title);
-            a.appendChild(meta);
+            if (w.images && it.image) {
+              var img = document.createElement('img');
+              img.className = 'rss-img';
+              img.alt = '';
+              img.src = it.image;
+              img.onerror = function () {
+                this.style.display = 'none';
+              };
+              a.appendChild(img);
+            }
+
+            var text = document.createElement('div');
+            text.className = 'rss-text';
+            text.appendChild(title);
+            text.appendChild(meta);
+            a.appendChild(text);
             list.appendChild(a);
           }
         })

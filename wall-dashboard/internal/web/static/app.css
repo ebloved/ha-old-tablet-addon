@@ -285,16 +285,35 @@ main {
 
 .rss {
   margin-top: 8px;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
+  min-height: 0;
   flex: 1 1 auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .rss-item {
-  display: block;
+  display: flex;
+  align-items: flex-start;
   padding: 6px 0;
   border-top: 1px solid var(--border);
   text-decoration: none;
   color: var(--text);
+}
+
+.rss-text {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.rss-img {
+  width: 54px;
+  height: 54px;
+  object-fit: cover;
+  border-radius: 8px;
+  margin-right: 8px;
+  flex: 0 0 auto;
+  background: #000;
 }
 
 .rss-item:first-child {

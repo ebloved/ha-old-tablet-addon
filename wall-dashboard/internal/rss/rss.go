@@ -9,6 +9,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"regexp"
 	"strings"
 	"sync"
@@ -22,6 +23,7 @@ type Item struct {
 	Published string `json:"published"`
 	Summary   string `json:"summary"`
 	Source    string `json:"source"`
+	Image     string `json:"image,omitempty"`
 }
 
 type cached struct {
@@ -142,6 +144,10 @@ func parse(body []byte) ([]Item, string, error) {
 					Link        string `xml:"link"`
 					PubDate     string `xml:"pubDate"`
 					Description string `xml:"description"`
+					Enclosure   *struct {
+						URL  string `xml:"url,attr"`
+						Type string `xml:"type,attr"`
+					} `xml:"enclosure"`
 				} `xml:"item"`
 			} `xml:"channel"`
 		}
@@ -150,11 +156,16 @@ func parse(body []byte) ([]Item, string, error) {
 		}
 		out := make([]Item, 0, len(doc.Channel.Items))
 		for _, it := range doc.Channel.Items {
+			enc := ""
+			if it.Enclosure != nil {
+				enc = it.Enclosure.URL
+			}
 			out = append(out, Item{
 				Title:     clean(it.Title),
 				Link:      strings.TrimSpace(it.Link),
 				Published: normTime(it.PubDate),
 				Summary:   summary(it.Description),
+				Image:     pickImage(enc, it.Description),
 			})
 		}
 		return out, clean(doc.Channel.Title), nil
@@ -180,10 +191,13 @@ func parse(body []byte) ([]Item, string, error) {
 		out := make([]Item, 0, len(doc.Entries))
 		for _, e := range doc.Entries {
 			link := ""
+			enclosure := ""
 			for _, l := range e.Links {
-				if l.Rel == "" || l.Rel == "alternate" {
+				if l.Rel == "enclosure" {
+					enclosure = l.Href
+				}
+				if (l.Rel == "" || l.Rel == "alternate") && link == "" {
 					link = l.Href
-					break
 				}
 			}
 			bodyText := e.Summary
@@ -199,12 +213,36 @@ func parse(body []byte) ([]Item, string, error) {
 				Link:      strings.TrimSpace(link),
 				Published: normTime(ts),
 				Summary:   summary(bodyText),
+				Image:     pickImage(enclosure, bodyText),
 			})
 		}
 		return out, clean(doc.Title), nil
 	}
 
 	return nil, "", fmt.Errorf("unsupported feed format: %s", root)
+}
+
+var imgRe = regexp.MustCompile(`(?i)<img[^>]+src=["']([^"']+)["']`)
+
+func pickImage(enclosure, body string) string {
+	if u := strings.TrimSpace(enclosure); u != "" && safeImage(u) {
+		return u
+	}
+	if m := imgRe.FindStringSubmatch(body); len(m) == 2 {
+		u := html.UnescapeString(strings.TrimSpace(m[1]))
+		if safeImage(u) {
+			return u
+		}
+	}
+	return ""
+}
+
+func safeImage(s string) bool {
+	u, err := url.Parse(s)
+	if err != nil {
+		return false
+	}
+	return u.Scheme == "http" || u.Scheme == "https"
 }
 
 func rootName(body []byte) (string, error) {

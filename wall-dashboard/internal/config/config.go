@@ -34,6 +34,7 @@ type Widget struct {
 	Feed     string  `json:"feed,omitempty"`
 	Limit    int     `json:"limit,omitempty"`
 	Interval int     `json:"interval,omitempty"`
+	Images   bool    `json:"images,omitempty"`
 	X        int     `json:"x"`
 	Y        int     `json:"y"`
 	W        float64 `json:"w"`

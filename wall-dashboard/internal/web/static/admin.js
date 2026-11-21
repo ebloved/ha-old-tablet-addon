@@ -590,6 +590,7 @@
     setVal('e-feed', w.feed || '');
     setVal('e-limit', w.limit || 8);
     setVal('e-interval', w.interval || 3);
+    $('e-images').checked = !!w.images;
     setVal('e-w', w.w || 1);
     setVal('e-h', w.h || 1);
     applyFieldState();
@@ -611,6 +612,7 @@
     $('e-entity').placeholder = w.type === 'alerts' ? 'необязательно: sensor.alerts' : 'light.kitchen';
     $('e-feed').disabled = w.type !== 'rss';
     $('e-limit').disabled = w.type !== 'rss';
+    $('e-images').disabled = w.type !== 'rss';
     $('e-interval').disabled = w.type !== 'camera';
     $('e-w').max = cfg.columns;
   }
@@ -976,6 +978,16 @@
     w.limit = clamp(parseInt(this.value, 10) || 8, 3, 30);
     this.value = w.limit;
     markDirty();
+  });
+
+  $('e-images').addEventListener('change', function () {
+    var w = cfg.widgets[selected];
+    if (!w) {
+      return;
+    }
+    w.images = this.checked;
+    markDirty();
+    rerenderCanvas();
   });
 
   $('e-interval').addEventListener('change', function () {
