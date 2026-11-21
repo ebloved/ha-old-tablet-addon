@@ -22,6 +22,7 @@ type Item struct {
 	Link      string `json:"link"`
 	Published string `json:"published"`
 	Summary   string `json:"summary"`
+	Content   string `json:"content,omitempty"`
 	Source    string `json:"source"`
 	Image     string `json:"image,omitempty"`
 }
@@ -165,6 +166,7 @@ func parse(body []byte) ([]Item, string, error) {
 				Link:      strings.TrimSpace(it.Link),
 				Published: normTime(it.PubDate),
 				Summary:   summary(it.Description),
+				Content:   longText(it.Description),
 				Image:     pickImage(enc, it.Description),
 			})
 		}
@@ -213,6 +215,7 @@ func parse(body []byte) ([]Item, string, error) {
 				Link:      strings.TrimSpace(link),
 				Published: normTime(ts),
 				Summary:   summary(bodyText),
+				Content:   longText(bodyText),
 				Image:     pickImage(enclosure, bodyText),
 			})
 		}
@@ -223,6 +226,27 @@ func parse(body []byte) ([]Item, string, error) {
 }
 
 var imgRe = regexp.MustCompile(`(?i)<img[^>]+src=["']([^"']+)["']`)
+var brRe = regexp.MustCompile(`(?i)<br\s*/?>`)
+var pEndRe = regexp.MustCompile(`(?i)</p\s*>`)
+var manyNL = regexp.MustCompile(`\n{3,}`)
+
+func longText(s string) string {
+	s = html.UnescapeString(s)
+	s = brRe.ReplaceAllString(s, "\n")
+	s = pEndRe.ReplaceAllString(s, "\n\n")
+	s = tagRe.ReplaceAllString(s, " ")
+	lines := strings.Split(s, "\n")
+	for i := range lines {
+		lines[i] = strings.Join(strings.Fields(lines[i]), " ")
+	}
+	s = manyNL.ReplaceAllString(strings.Join(lines, "\n"), "\n\n")
+	s = strings.TrimSpace(s)
+	if utf8.RuneCountInString(s) > 4000 {
+		r := []rune(s)
+		s = string(r[:4000]) + "…"
+	}
+	return s
+}
 
 func pickImage(enclosure, body string) string {
 	if u := strings.TrimSpace(enclosure); u != "" && safeImage(u) {

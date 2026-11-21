@@ -622,6 +622,88 @@
     return pad(d.getDate()) + '.' + pad(d.getMonth() + 1) + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
   }
 
+  function newsEsc(e) {
+    if (e.key === 'Escape') {
+      closeNewsModal();
+    }
+  }
+
+  function closeNewsModal() {
+    var o = document.querySelector('.news-overlay');
+    if (o && o.parentNode) {
+      o.parentNode.removeChild(o);
+    }
+    document.removeEventListener('keydown', newsEsc);
+  }
+
+  function showNewsModal(it, w, idx) {
+    closeNewsModal();
+
+    var overlay = document.createElement('div');
+    overlay.className = 'news-overlay';
+    var modal = document.createElement('div');
+    modal.className = 'news-modal';
+    var scroll = document.createElement('div');
+    scroll.className = 'news-modal-scroll';
+
+    if (it.image) {
+      var img = document.createElement('img');
+      img.className = 'news-modal-img';
+      img.alt = '';
+      img.src =
+        'api/rss/image?id=' +
+        encodeURIComponent(w.id) +
+        '&i=' +
+        idx +
+        '&t=' +
+        encodeURIComponent(token);
+      img.onerror = function () {
+        this.style.display = 'none';
+      };
+      scroll.appendChild(img);
+    }
+
+    var titleText = String(it.title || '');
+    if (titleText && titleText !== 'Фото' && titleText !== 'Видео') {
+      var h = document.createElement('h2');
+      h.className = 'news-modal-title';
+      h.textContent = titleText;
+      scroll.appendChild(h);
+    }
+
+    var meta = document.createElement('div');
+    meta.className = 'news-modal-meta';
+    meta.textContent = [it.source, shortDate(it.published)].filter(Boolean).join(' · ');
+    scroll.appendChild(meta);
+
+    var text = it.content || it.summary || '';
+    if (text) {
+      var body = document.createElement('div');
+      body.className = 'news-modal-body';
+      body.textContent = text;
+      scroll.appendChild(body);
+    }
+
+    var foot = document.createElement('div');
+    foot.className = 'news-modal-foot';
+    var close = document.createElement('button');
+    close.className = 'news-modal-close';
+    close.textContent = 'Закрыть';
+    close.addEventListener('click', closeNewsModal);
+    foot.appendChild(close);
+
+    modal.appendChild(scroll);
+    modal.appendChild(foot);
+    overlay.appendChild(modal);
+    overlay.addEventListener('click', function (e) {
+      if (e.target === overlay) {
+        closeNewsModal();
+      }
+    });
+    document.body.appendChild(overlay);
+    document.addEventListener('keydown', newsEsc);
+  }
+
   function loadFeed(node, w) {
     var list = node.querySelector('.rss');
     if (!w.feed) {
@@ -653,6 +735,12 @@
             a.href = it.link || '#';
             a.target = '_blank';
             a.rel = 'noopener noreferrer';
+            a.dataset.i = String(i);
+            a.addEventListener('click', function (e) {
+              e.preventDefault();
+              var idx = parseInt(this.dataset.i, 10) || 0;
+              showNewsModal(items[idx], w, idx);
+            });
 
             var title = document.createElement('div');
             title.className = 'rss-title';
