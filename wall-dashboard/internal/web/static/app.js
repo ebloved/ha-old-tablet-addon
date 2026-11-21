@@ -670,7 +670,7 @@
               var img = document.createElement('img');
               img.className = 'rss-img';
               img.alt = '';
-              img.src = it.image;
+              img.src = 'api/rss/image?id=' + encodeURIComponent(w.id) + '&i=' + i + '&t=' + encodeURIComponent(token);
               img.onerror = function () {
                 this.style.display = 'none';
               };

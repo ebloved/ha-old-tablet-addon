@@ -9,15 +9,22 @@
     'custom': { name: 'Свои пропорции · 4:3', ratio: 4 / 3, cols: 6 }
   };
 
+  var ACTION_DOMAINS = { script: true, scene: true, button: true, input_button: true };
+
   var cfg = null;
   var states = [];
+  var cur = 0;
   var selected = -1;
   var dirty = false;
   var dragIndex = -1;
   var dragged = false;
   var resizing = false;
 
-  var ACTION_DOMAINS = { script: true, scene: true, button: true, input_button: true };
+  var tileNodes = [];
+  var dragOffTracks = 0;
+  var dragOffRows = 0;
+  var dragOrigX = 0;
+  var dragOrigY = 0;
 
   function $(id) {
     return document.getElementById(id);
@@ -41,6 +48,16 @@
     });
   }
 
+  function dash() {
+    if (!cfg || !cfg.dashboards || !cfg.dashboards.length) {
+      return null;
+    }
+    if (cur < 0 || cur >= cfg.dashboards.length) {
+      cur = 0;
+    }
+    return cfg.dashboards[cur];
+  }
+
   function load() {
     return Promise.all([
       req('GET', 'api/admin/config'),
@@ -50,19 +67,39 @@
       .then(function (res) {
         cfg = res[0];
         states = res[2] || [];
-        if (!cfg.widgets) {
-          cfg.widgets = [];
+        if (!cfg.dashboards) {
+          cfg.dashboards = [];
         }
+        if (!cfg.dashboards.length) {
+          cfg.dashboards.push({
+            id: '',
+            name: 'Основной',
+            device_token: '',
+            orientation: 'landscape',
+            columns: 6,
+            device: 'ipad-9.7',
+            widgets: [{ id: 'clock', type: 'clock', x: 0, y: 0, w: 2, h: 1 }]
+          });
+        }
+        cfg.dashboards.forEach(function (d) {
+          if (!d.widgets) {
+            d.widgets = [];
+          }
+          if (!d.orientation) {
+            d.orientation = 'landscape';
+          }
+          if (!d.columns) {
+            d.columns = 6;
+          }
+          if (!d.device) {
+            d.device = 'ipad-9.7';
+          }
+        });
         if (!cfg.theme) {
           cfg.theme = 'dark';
         }
-        if (!cfg.columns) {
-          cfg.columns = 6;
-        }
-        if (!cfg.device) {
-          cfg.device = 'ipad-9.7';
-        }
-        selected = cfg.widgets.length ? 0 : -1;
+        cur = 0;
+        selected = dash().widgets.length ? 0 : -1;
 
         if (!$('host').value) {
           $('host').value = location.hostname || 'homeassistant.local';
@@ -79,17 +116,6 @@
       });
   }
 
-  function fillEntityList() {
-    var dl = $('entity-list');
-    dl.innerHTML = '';
-    for (var i = 0; i < states.length; i++) {
-      var o = document.createElement('option');
-      o.value = states[i].entity_id;
-      o.label = states[i].name + ' — ' + states[i].state;
-      dl.appendChild(o);
-    }
-  }
-
   function fillDevices() {
     var sel = $('device');
     sel.innerHTML = '';
@@ -101,9 +127,38 @@
     });
   }
 
+  function fillEntityList() {
+    var dl = $('entity-list');
+    dl.innerHTML = '';
+    for (var i = 0; i < states.length; i++) {
+      var o = document.createElement('option');
+      o.value = states[i].entity_id;
+      o.label = states[i].name + ' — ' + states[i].state;
+      dl.appendChild(o);
+    }
+  }
+
+  function fillBoards() {
+    var sel = $('board');
+    var keep = cur;
+    sel.innerHTML = '';
+    cfg.dashboards.forEach(function (d, i) {
+      var o = document.createElement('option');
+      o.value = String(i);
+      o.textContent = d.name || d.id || 'Планшет ' + (i + 1);
+      sel.appendChild(o);
+    });
+    cur = clamp(keep, 0, cfg.dashboards.length - 1);
+    sel.value = String(cur);
+  }
+
   function syncToolbar() {
-    $('device').value = cfg.device;
-    $('columns').value = cfg.columns;
+    var d = dash();
+    fillBoards();
+    $('board-name').value = d.name || '';
+    $('device').value = d.device || 'ipad-9.7';
+    $('columns').value = d.columns || 6;
+    $('orientation').value = d.orientation || 'landscape';
     $('theme').value = cfg.theme;
     $('theme-mode').value = cfg.theme_mode || 'manual';
     $('theme-entity').value = cfg.theme_entity || '';
@@ -112,6 +167,11 @@
     $('theme-light-from').value = cfg.theme_light_from || '07:00';
     $('title').value = cfg.title || '';
     renderThemeControls();
+  }
+
+  function renderBoards() {
+    fillBoards();
+    $('board-name').value = dash().name || '';
   }
 
   function renderThemeControls() {
@@ -141,19 +201,22 @@
   }
 
   function renderTablet() {
+    var d = dash();
     var host = tabletHost();
-    $('token').textContent = cfg.device_token || '—';
-    if (!cfg.device_token) {
-      $('tablet-url').textContent = '—';
+    $('token').textContent = d.device_token || '—';
+    if (!d.device_token) {
+      $('tablet-url').textContent = 'сохраните планшет, чтобы получить ссылку';
       $('qr').removeAttribute('src');
       return;
     }
-    $('tablet-url').textContent = 'http://' + host + ':8088/?t=' + cfg.device_token;
+    $('tablet-url').textContent = 'http://' + host + ':8088/?t=' + d.device_token;
     $('qr').src =
       'api/admin/qr?host=' +
       encodeURIComponent(host) +
+      '&dashboard=' +
+      encodeURIComponent(d.id || '') +
       '&v=' +
-      encodeURIComponent(cfg.device_token.slice(0, 8));
+      encodeURIComponent(d.device_token.slice(0, 8));
   }
 
   function autoName(w) {
@@ -236,14 +299,19 @@
 
   function applyCanvasTheme() {
     $('canvas').className = 'canvas theme-' + effectiveTheme(cfg);
-    $('canvas').style.setProperty('--tracks', cfg.columns * 2);
+    $('canvas').style.setProperty('--tracks', dash().columns * 2);
   }
 
   function fitStage() {
-    var d = DEVICES[cfg.device] || DEVICES['ipad-9.7'];
+    var d = dash();
+    var dev = DEVICES[d.device] || DEVICES['ipad-9.7'];
+    var ratio = dev.ratio;
+    if (d.orientation === 'portrait') {
+      ratio = 1 / ratio;
+    }
     var width = $('stage').clientWidth;
     if (width > 0) {
-      $('stage').style.height = Math.round(width / d.ratio) + 'px';
+      $('stage').style.height = Math.round(width / ratio) + 'px';
     }
   }
 
@@ -255,11 +323,12 @@
 
   function renderCanvas() {
     var canvas = $('canvas');
+    var d = dash();
     canvas.innerHTML = '';
     tileNodes = [];
-    canvas.style.setProperty('--tracks', cfg.columns * 2);
+    canvas.style.setProperty('--tracks', d.columns * 2);
 
-    if (!cfg.widgets.length) {
+    if (!d.widgets.length) {
       var empty = document.createElement('div');
       empty.className = 'empty';
       empty.textContent = 'Пусто. Нажмите «+ Виджет».';
@@ -267,25 +336,19 @@
       return;
     }
 
-    for (var i = 0; i < cfg.widgets.length; i++) {
-      var node = makeTile(cfg.widgets[i], i);
+    for (var i = 0; i < d.widgets.length; i++) {
+      var node = makeTile(d.widgets[i], i);
       canvas.appendChild(node);
       tileNodes.push(node);
     }
   }
-
-  var tileNodes = [];
-  var dragOffTracks = 0;
-  var dragOffRows = 0;
-  var dragOrigX = 0;
-  var dragOrigY = 0;
 
   function spanOf(v) {
     return Math.max(1, Math.round((v || 1) * 2));
   }
 
   function place(el, w) {
-    var tracks = cfg.columns * 2;
+    var tracks = dash().columns * 2;
     var span = Math.min(tracks, spanOf(w.w));
     var x = Math.max(0, Math.min(w.x || 0, tracks - span));
     el.style.gridColumn = x + 1 + ' / span ' + span;
@@ -300,7 +363,7 @@
     var rowGap = parseFloat(cs.rowGap) || gap;
     var padL = parseFloat(cs.paddingLeft) || 0;
     var padT = parseFloat(cs.paddingTop) || 0;
-    var tracks = cfg.columns * 2;
+    var tracks = dash().columns * 2;
     var inner = canvas.clientWidth - padL - (parseFloat(cs.paddingRight) || 0) - gap * (tracks - 1);
     return {
       gap: gap,
@@ -322,12 +385,10 @@
   }
 
   function overlaps(i) {
-    var a = rectOf(cfg.widgets[i]);
-    for (var k = 0; k < cfg.widgets.length; k++) {
-      if (k === i) {
-        continue;
-      }
-      if (rectOverlap(a, rectOf(cfg.widgets[k]))) {
+    var ws = dash().widgets;
+    var a = rectOf(ws[i]);
+    for (var k = 0; k < ws.length; k++) {
+      if (k !== i && rectOverlap(a, rectOf(ws[k]))) {
         return true;
       }
     }
@@ -335,13 +396,14 @@
   }
 
   function freeSpot(span, h) {
-    var tracks = cfg.columns * 2;
+    var ws = dash().widgets;
+    var tracks = dash().columns * 2;
     for (var y = 0; y < 80; y++) {
       for (var x = 0; x <= tracks - span; x++) {
         var r = { x: x, y: y, w: span, h: h };
         var free = true;
-        for (var i = 0; i < cfg.widgets.length; i++) {
-          if (rectOverlap(r, rectOf(cfg.widgets[i]))) {
+        for (var i = 0; i < ws.length; i++) {
+          if (rectOverlap(r, rectOf(ws[i]))) {
             free = false;
             break;
           }
@@ -355,12 +417,13 @@
   }
 
   function packAll() {
-    var tracks = cfg.columns * 2;
+    var d = dash();
+    var tracks = d.columns * 2;
     var x = 0;
     var y = 0;
     var rowH = 0;
-    for (var i = 0; i < cfg.widgets.length; i++) {
-      var w = cfg.widgets[i];
+    for (var i = 0; i < d.widgets.length; i++) {
+      var w = d.widgets[i];
       var span = spanOf(w.w);
       if (x + span > tracks) {
         x = 0;
@@ -500,7 +563,7 @@
       }
       dragged = true;
       dragIndex = i;
-      var dw = cfg.widgets[i];
+      var dw = dash().widgets[i];
       dragOrigX = dw.x || 0;
       dragOrigY = dw.y || 0;
       var g = geometry();
@@ -543,7 +606,7 @@
       return;
     }
     var i = dragIndex;
-    var w = cfg.widgets[i];
+    var w = dash().widgets[i];
     dragIndex = -1;
     if (!w) {
       return;
@@ -577,13 +640,14 @@
   }
 
   function renderInspector() {
-    var has = selected >= 0 && selected < cfg.widgets.length;
+    var d = dash();
+    var has = selected >= 0 && selected < d.widgets.length;
     $('fields').hidden = !has;
     $('empty-inspector').hidden = has;
     if (!has) {
       return;
     }
-    var w = cfg.widgets[selected];
+    var w = d.widgets[selected];
     setVal('e-type', w.type || 'entity');
     setVal('e-entity', w.entity || '');
     setVal('e-name', w.name || '');
@@ -604,7 +668,7 @@
   }
 
   function applyFieldState() {
-    var w = cfg.widgets[selected];
+    var w = dash().widgets[selected];
     if (!w) {
       return;
     }
@@ -614,7 +678,7 @@
     $('e-limit').disabled = w.type !== 'rss';
     $('e-images').disabled = w.type !== 'rss';
     $('e-interval').disabled = w.type !== 'camera';
-    $('e-w').max = cfg.columns;
+    $('e-w').max = dash().columns;
   }
 
   function startResize(ev, i) {
@@ -625,7 +689,7 @@
     ev.stopPropagation();
     select(i);
 
-    var w = cfg.widgets[i];
+    var w = dash().widgets[i];
     var tile = tileNodes[i] || ev.currentTarget.parentNode;
     var touch = ev.type === 'touchstart';
     var p0 = touch ? ev.touches[0] : ev;
@@ -698,37 +762,89 @@
   }
 
   function addWidget() {
+    var d = dash();
     var spot = freeSpot(spanOf(2), 1);
-    cfg.widgets.push({ id: '', type: 'entity', entity: '', name: '', interval: 3, x: spot.x, y: spot.y, w: 2, h: 1 });
-    selected = cfg.widgets.length - 1;
+    d.widgets.push({
+      id: '',
+      type: 'entity',
+      entity: '',
+      name: '',
+      interval: 3,
+      x: spot.x,
+      y: spot.y,
+      w: 2,
+      h: 1
+    });
+    selected = d.widgets.length - 1;
     markDirty();
     renderAll();
   }
 
   function duplicateWidget() {
+    var d = dash();
     if (selected < 0) {
       return;
     }
-    var copy = JSON.parse(JSON.stringify(cfg.widgets[selected]));
+    var copy = JSON.parse(JSON.stringify(d.widgets[selected]));
     copy.id = '';
     var spot = freeSpot(spanOf(copy.w), copy.h || 1);
     copy.x = spot.x;
     copy.y = spot.y;
-    cfg.widgets.splice(selected + 1, 0, copy);
+    d.widgets.splice(selected + 1, 0, copy);
     selected = selected + 1;
     markDirty();
     renderAll();
   }
 
   function deleteWidget() {
+    var d = dash();
     if (selected < 0) {
       return;
     }
-    cfg.widgets.splice(selected, 1);
-    if (selected >= cfg.widgets.length) {
-      selected = cfg.widgets.length - 1;
+    d.widgets.splice(selected, 1);
+    if (selected >= d.widgets.length) {
+      selected = d.widgets.length - 1;
     }
     markDirty();
+    renderAll();
+  }
+
+  function addBoard() {
+    var n = cfg.dashboards.length + 1;
+    cfg.dashboards.push({
+      id: '',
+      name: 'Планшет ' + n,
+      device_token: '',
+      orientation: 'landscape',
+      columns: 6,
+      device: 'ipad-9.7',
+      widgets: [{ id: '', type: 'clock', name: '', x: 0, y: 0, w: 2, h: 1 }]
+    });
+    cur = cfg.dashboards.length - 1;
+    selected = 0;
+    markDirty();
+    renderBoards();
+    syncToolbar();
+    renderTablet();
+    renderAll();
+  }
+
+  function deleteBoard() {
+    if (cfg.dashboards.length <= 1) {
+      alert('Должен остаться хотя бы один планшет');
+      return;
+    }
+    var d = dash();
+    if (!confirm('Удалить планшет «' + (d.name || d.id) + '»?')) {
+      return;
+    }
+    cfg.dashboards.splice(cur, 1);
+    cur = clamp(cur, 0, cfg.dashboards.length - 1);
+    selected = 0;
+    markDirty();
+    renderBoards();
+    syncToolbar();
+    renderTablet();
     renderAll();
   }
 
@@ -749,19 +865,18 @@
       theme_dark_state: cfg.theme_dark_state || 'on',
       theme_dark_from: cfg.theme_dark_from || '21:00',
       theme_light_from: cfg.theme_light_from || '07:00',
-      columns: cfg.columns,
-      device: cfg.device,
       layout_version: 2,
-      widgets: cfg.widgets
+      dashboards: cfg.dashboards
     };
     req('PUT', 'api/admin/config', body)
       .then(function (saved) {
         cfg = saved;
-        if (!cfg.widgets) {
-          cfg.widgets = [];
+        if (!cfg.dashboards || !cfg.dashboards.length) {
+          throw new Error('no dashboards');
         }
-        if (selected >= cfg.widgets.length) {
-          selected = cfg.widgets.length - 1;
+        cur = clamp(cur, 0, cfg.dashboards.length - 1);
+        if (selected >= cfg.dashboards[cur].widgets.length) {
+          selected = cfg.dashboards[cur].widgets.length - 1;
         }
         clearDirty();
         syncToolbar();
@@ -779,12 +894,17 @@
   }
 
   function regen() {
+    var d = dash();
+    if (!d.id) {
+      alert('Сначала сохраните планшет');
+      return;
+    }
     if (!confirm('Старый токен перестанет работать. Планшет придётся открыть по новой ссылке. Продолжить?')) {
       return;
     }
-    req('POST', 'api/admin/token')
+    req('POST', 'api/admin/token?dashboard=' + encodeURIComponent(d.id), {})
       .then(function (res) {
-        cfg.device_token = res.token;
+        d.device_token = res.token;
         renderTablet();
       })
       .catch(function (e) {
@@ -793,9 +913,9 @@
   }
 
   function tickClocks() {
-    var d = new Date();
-    var hh = (d.getHours() < 10 ? '0' : '') + d.getHours();
-    var mm = (d.getMinutes() < 10 ? '0' : '') + d.getMinutes();
+    var now = new Date();
+    var hh = (now.getHours() < 10 ? '0' : '') + now.getHours();
+    var mm = (now.getMinutes() < 10 ? '0' : '') + now.getMinutes();
     var times = $('canvas').querySelectorAll('.time');
     for (var i = 0; i < times.length; i++) {
       times[i].textContent = hh + ':' + mm;
@@ -803,13 +923,13 @@
     var dates = $('canvas').querySelectorAll('.t-clock .date');
     for (var j = 0; j < dates.length; j++) {
       try {
-        dates[j].textContent = d.toLocaleDateString(undefined, {
+        dates[j].textContent = now.toLocaleDateString(undefined, {
           weekday: 'long',
           day: 'numeric',
           month: 'long'
         });
       } catch (e) {
-        dates[j].textContent = d.getDate() + '.' + (d.getMonth() + 1) + '.' + d.getFullYear();
+        dates[j].textContent = now.getDate() + '.' + (now.getMonth() + 1) + '.' + now.getFullYear();
       }
     }
   }
@@ -819,60 +939,51 @@
   $('pack').addEventListener('click', packAll);
   $('regen').addEventListener('click', regen);
   $('host').addEventListener('change', renderTablet);
-
-  var canvasEl = $('canvas');
-  canvasEl.addEventListener('dragover', function (e) {
-    if (dragIndex < 0) {
-      return;
-    }
-    e.preventDefault();
-    var w = cfg.widgets[dragIndex];
-    if (!w) {
-      return;
-    }
-    var g = geometry();
-    var rect = canvasEl.getBoundingClientRect();
-    var px = e.clientX - rect.left - g.padL + canvasEl.scrollLeft;
-    var py = e.clientY - rect.top - g.padT + canvasEl.scrollTop;
-    var span = spanOf(w.w);
-    var tx = Math.round(px / (g.trackW + g.gap) - dragOffTracks);
-    var ty = Math.round(py / (g.rowH + g.rowGap) - dragOffRows);
-    tx = clamp(tx, 0, g.tracks - span);
-    ty = Math.max(0, ty);
-    if (tx !== w.x || ty !== w.y) {
-      w.x = tx;
-      w.y = ty;
-      if (tileNodes[dragIndex]) {
-        place(tileNodes[dragIndex], w);
-        tileNodes[dragIndex].classList.toggle('overlap', overlaps(dragIndex));
-      }
-    }
-  });
-  canvasEl.addEventListener('drop', function (e) {
-    e.preventDefault();
-    finishDrag(true);
-  });
   $('e-dup').addEventListener('click', duplicateWidget);
   $('e-del').addEventListener('click', deleteWidget);
+  $('board-add').addEventListener('click', addBoard);
+  $('board-del').addEventListener('click', deleteBoard);
 
-  $('device').addEventListener('change', function () {
-    cfg.device = this.value;
-    var d = DEVICES[cfg.device];
-    if (d && cfg.device !== 'custom') {
-      cfg.columns = d.cols;
-      $('columns').value = d.cols;
-    }
-    markDirty();
-    applyCanvasTheme();
+  $('board').addEventListener('change', function () {
+    cur = parseInt(this.value, 10) || 0;
+    selected = dash().widgets.length ? 0 : -1;
+    syncToolbar();
+    renderTablet();
     renderAll();
   });
 
+  $('board-name').addEventListener('input', function () {
+    dash().name = this.value;
+    markDirty();
+    fillBoards();
+  });
+
+  $('device').addEventListener('change', function () {
+    var d = dash();
+    d.device = this.value;
+    var preset = DEVICES[d.device];
+    if (preset && d.device !== 'custom') {
+      d.columns = preset.cols;
+      $('columns').value = d.columns;
+    }
+    markDirty();
+    renderAll();
+  });
+
+  $('orientation').addEventListener('change', function () {
+    dash().orientation = this.value === 'portrait' ? 'portrait' : 'landscape';
+    markDirty();
+    applyCanvasTheme();
+    fitStage();
+  });
+
   $('columns').addEventListener('change', function () {
-    cfg.columns = clamp(parseInt(this.value, 10) || 6, 2, 12);
-    this.value = cfg.columns;
-    var tracks = cfg.columns * 2;
-    for (var i = 0; i < cfg.widgets.length; i++) {
-      var w = cfg.widgets[i];
+    var d = dash();
+    d.columns = clamp(parseInt(this.value, 10) || 6, 2, 12);
+    this.value = d.columns;
+    var tracks = d.columns * 2;
+    for (var i = 0; i < d.widgets.length; i++) {
+      var w = d.widgets[i];
       var span = Math.min(spanOf(w.w), tracks);
       w.w = span / 2;
       if ((w.x || 0) + span > tracks) {
@@ -926,7 +1037,7 @@
   });
 
   $('e-type').addEventListener('change', function () {
-    var w = cfg.widgets[selected];
+    var w = dash().widgets[selected];
     if (!w) {
       return;
     }
@@ -937,7 +1048,7 @@
   });
 
   $('e-entity').addEventListener('change', function () {
-    var w = cfg.widgets[selected];
+    var w = dash().widgets[selected];
     if (!w) {
       return;
     }
@@ -947,7 +1058,7 @@
   });
 
   $('e-name').addEventListener('input', function () {
-    var w = cfg.widgets[selected];
+    var w = dash().widgets[selected];
     if (!w) {
       return;
     }
@@ -961,7 +1072,7 @@
   });
 
   $('e-feed').addEventListener('change', function () {
-    var w = cfg.widgets[selected];
+    var w = dash().widgets[selected];
     if (!w) {
       return;
     }
@@ -971,7 +1082,7 @@
   });
 
   $('e-limit').addEventListener('change', function () {
-    var w = cfg.widgets[selected];
+    var w = dash().widgets[selected];
     if (!w) {
       return;
     }
@@ -981,7 +1092,7 @@
   });
 
   $('e-images').addEventListener('change', function () {
-    var w = cfg.widgets[selected];
+    var w = dash().widgets[selected];
     if (!w) {
       return;
     }
@@ -991,7 +1102,7 @@
   });
 
   $('e-interval').addEventListener('change', function () {
-    var w = cfg.widgets[selected];
+    var w = dash().widgets[selected];
     if (!w) {
       return;
     }
@@ -1002,7 +1113,7 @@
   });
 
   $('e-w').addEventListener('change', function () {
-    var w = cfg.widgets[selected];
+    var w = dash().widgets[selected];
     if (!w) {
       return;
     }
@@ -1010,24 +1121,14 @@
     if (isNaN(v)) {
       v = 1;
     }
-    w.w = Math.round(clamp(v, 0.5, cfg.columns) * 2) / 2;
+    w.w = Math.round(clamp(v, 0.5, dash().columns) * 2) / 2;
     this.value = w.w;
     markDirty();
     rerenderCanvas();
   });
 
-  $('e-newrow') && $('e-newrow').addEventListener('change', function () {
-    var w = cfg.widgets[selected];
-    if (!w) {
-      return;
-    }
-    w.new_row = this.checked;
-    markDirty();
-    rerenderCanvas();
-  });
-
   $('e-h').addEventListener('change', function () {
-    var w = cfg.widgets[selected];
+    var w = dash().widgets[selected];
     if (!w) {
       return;
     }
@@ -1035,6 +1136,40 @@
     this.value = w.h;
     markDirty();
     rerenderCanvas();
+  });
+
+  var canvasEl = $('canvas');
+  canvasEl.addEventListener('dragover', function (e) {
+    if (dragIndex < 0) {
+      return;
+    }
+    e.preventDefault();
+    var d = dash();
+    var w = d.widgets[dragIndex];
+    if (!w) {
+      return;
+    }
+    var g = geometry();
+    var rect = canvasEl.getBoundingClientRect();
+    var px = e.clientX - rect.left - g.padL + canvasEl.scrollLeft;
+    var py = e.clientY - rect.top - g.padT + canvasEl.scrollTop;
+    var span = spanOf(w.w);
+    var tx = Math.round(px / (g.trackW + g.gap) - dragOffTracks);
+    var ty = Math.round(py / (g.rowH + g.rowGap) - dragOffRows);
+    tx = clamp(tx, 0, g.tracks - span);
+    ty = Math.max(0, ty);
+    if (tx !== w.x || ty !== w.y) {
+      w.x = tx;
+      w.y = ty;
+      if (tileNodes[dragIndex]) {
+        place(tileNodes[dragIndex], w);
+        tileNodes[dragIndex].classList.toggle('overlap', overlaps(dragIndex));
+      }
+    }
+  });
+  canvasEl.addEventListener('drop', function (e) {
+    e.preventDefault();
+    finishDrag(true);
   });
 
   window.addEventListener('resize', fitStage);
@@ -1051,7 +1186,6 @@
       applyCanvasTheme();
     }
   }, 60000);
-
   setInterval(function () {
     req('GET', 'api/admin/status').then(renderStatus).catch(function () {});
   }, 10000);

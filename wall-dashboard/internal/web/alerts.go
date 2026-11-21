@@ -30,10 +30,15 @@ var skipAlertDomains = map[string]bool{
 }
 
 func (s *Server) alerts(w http.ResponseWriter, r *http.Request) {
+	d, ok := s.dashboardFor(r)
+	if !ok {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
 	id := r.URL.Query().Get("id")
 	entity := ""
 	found := false
-	for _, wd := range s.cfg.Get().Widgets {
+	for _, wd := range d.Widgets {
 		if wd.ID == id && wd.Type == "alerts" {
 			entity = wd.Entity
 			found = true

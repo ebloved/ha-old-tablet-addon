@@ -14,11 +14,16 @@ type cachedCamera struct {
 }
 
 func (s *Server) camera(w http.ResponseWriter, r *http.Request) {
+	d, ok := s.dashboardFor(r)
+	if !ok {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
 	id := r.URL.Query().Get("id")
 	entity := ""
 	interval := 3
 	found := false
-	for _, wd := range s.cfg.Get().Widgets {
+	for _, wd := range d.Widgets {
 		if wd.ID == id && wd.Type == "camera" {
 			entity = wd.Entity
 			interval = wd.Interval
@@ -38,9 +43,9 @@ func (s *Server) camera(w http.ResponseWriter, r *http.Request) {
 	}
 	ttl := time.Duration(interval) * time.Second
 
-	key := id
-	if key == "" {
-		key = entity
+	key := d.ID + "/" + id
+	if id == "" {
+		key = d.ID + "/" + entity
 	}
 
 	s.camMu.Lock()

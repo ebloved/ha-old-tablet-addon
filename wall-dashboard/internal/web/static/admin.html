@@ -150,8 +150,16 @@
 
   <h2>Редактор</h2>
   <div class="card">
+    <div class="toolbar" id="boards-bar">
+      <label>Планшет <select id="board"></select></label>
+      <label>Название <input id="board-name" style="width:170px;"></label>
+      <button id="board-add">+ Планшет</button>
+      <button id="board-del" class="danger">Удалить</button>
+    </div>
+
     <div class="toolbar">
       <label>Устройство <select id="device"></select></label>
+      <label>Ориентация <select id="orientation"><option value="landscape">альбомная</option><option value="portrait">портретная</option></select></label>
       <label>Колонки <input id="columns" type="number" min="2" max="12" style="width:64px;"></label>
       <label>Тема <select id="theme-mode">
         <option value="manual">вручную</option>

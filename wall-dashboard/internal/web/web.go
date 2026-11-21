@@ -3,12 +3,12 @@ package web
 import (
 	"context"
 	"crypto/sha256"
-	"crypto/subtle"
 	"embed"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"html"
+	"io"
 	"log/slog"
 	"net/http"
 	"regexp"
@@ -44,14 +44,19 @@ var assetVersion = func() string {
 }()
 
 type Server struct {
-	cfg     *config.Store
-	ha      *ha.Client
-	rss     *rss.Cache
-	log     *slog.Logger
+	cfg *config.Store
+	ha  *ha.Client
+	rss *rss.Cache
+	log *slog.Logger
+
 	ingress bool
+	httpc   *http.Client
 
 	camMu sync.Mutex
 	cam   map[string]cachedCamera
+
+	imgMu sync.Mutex
+	img   map[string]cachedImage
 }
 
 func New(cfg *config.Store, hac *ha.Client, rc *rss.Cache, log *slog.Logger, ingress bool) *Server {
@@ -61,7 +66,9 @@ func New(cfg *config.Store, hac *ha.Client, rc *rss.Cache, log *slog.Logger, ing
 		rss:     rc,
 		log:     log,
 		ingress: ingress,
+		httpc:   &http.Client{Timeout: 20 * time.Second},
 		cam:     make(map[string]cachedCamera),
+		img:     make(map[string]cachedImage),
 	}
 }
 
@@ -80,31 +87,14 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /app.js", staticFile("app.js", "application/javascript; charset=utf-8"))
 	mux.HandleFunc("GET /app.css", staticFile("app.css", "text/css; charset=utf-8"))
 
-	mux.HandleFunc("GET /api/config", s.auth(func(w http.ResponseWriter, r *http.Request) {
-		c := s.cfg.Get()
-		c.DeviceToken = ""
-		writeJSON(w, http.StatusOK, c)
-	}))
-
-	mux.HandleFunc("GET /api/state", s.auth(func(w http.ResponseWriter, r *http.Request) {
-		c := s.cfg.Get()
-		out := make(map[string]ha.State)
-		for _, wd := range c.Widgets {
-			if wd.Entity == "" {
-				continue
-			}
-			if st, ok := s.ha.State(wd.Entity); ok {
-				out[wd.Entity] = st
-			}
-		}
-		writeJSON(w, http.StatusOK, out)
-	}))
-
-	mux.HandleFunc("GET /api/events", s.auth(s.events))
-	mux.HandleFunc("POST /api/action", s.auth(s.action))
-	mux.HandleFunc("GET /api/rss", s.auth(s.feed))
-	mux.HandleFunc("GET /api/alerts", s.auth(s.alerts))
-	mux.HandleFunc("GET /api/camera", s.auth(s.camera))
+	mux.HandleFunc("GET /api/config", s.config)
+	mux.HandleFunc("GET /api/state", s.state)
+	mux.HandleFunc("GET /api/events", s.events)
+	mux.HandleFunc("POST /api/action", s.action)
+	mux.HandleFunc("GET /api/rss", s.feed)
+	mux.HandleFunc("GET /api/rss/image", s.feedImage)
+	mux.HandleFunc("GET /api/alerts", s.alerts)
+	mux.HandleFunc("GET /api/camera", s.camera)
 
 	if s.ingress {
 		mux.HandleFunc("GET /admin", s.adminPage)
@@ -141,9 +131,28 @@ func staticFile(name, contentType string) http.HandlerFunc {
 	}
 }
 
+// dashboardFor resolves the tablet by device token, or the default/first
+// dashboard behind ingress.
+func (s *Server) dashboardFor(r *http.Request) (config.Dashboard, bool) {
+	if s.ingress {
+		if id := r.URL.Query().Get("dashboard"); id != "" {
+			return s.cfg.DashboardByID(id)
+		}
+		cfg := s.cfg.Get()
+		if len(cfg.Dashboards) > 0 {
+			return cfg.Dashboards[0], true
+		}
+		return config.Dashboard{}, false
+	}
+	tok := r.Header.Get("X-Dash-Token")
+	if tok == "" {
+		tok = r.URL.Query().Get("t")
+	}
+	return s.cfg.DashboardByToken(tok)
+}
+
 func (s *Server) base(r *http.Request) string {
-	base := strings.TrimRight(r.Header.Get("X-Ingress-Path"), "/")
-	return base
+	return strings.TrimRight(r.Header.Get("X-Ingress-Path"), "/")
 }
 
 func (s *Server) index(w http.ResponseWriter, r *http.Request) {
@@ -156,18 +165,28 @@ func (s *Server) index(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "template missing", http.StatusInternalServerError)
 		return
 	}
+	cfg := s.cfg.Get()
+
+	d, ok := s.dashboardFor(r)
+	if !ok && len(cfg.Dashboards) > 0 {
+		d = cfg.Dashboards[0]
+	}
+	columns := d.Columns
+	if columns < 2 || columns > 12 {
+		columns = 6
+	}
+
 	page := string(b)
 	page = strings.ReplaceAll(page, "__BASE__", s.base(r))
-	page = strings.ReplaceAll(page, "__TITLE__", html.EscapeString(s.cfg.Get().Title))
+	page = strings.ReplaceAll(page, "__TITLE__", html.EscapeString(cfg.Title))
 	adminLink := ""
 	if s.ingress {
 		adminLink = `<a class="admin" href="admin" title="Настройки">&#9881;</a>`
 	}
 	page = strings.ReplaceAll(page, "__ADMIN_LINK__", adminLink)
 	page = strings.ReplaceAll(page, "__V__", assetVersion)
-	c := s.cfg.Get()
-	page = strings.ReplaceAll(page, "__THEME__", c.Theme)
-	page = strings.ReplaceAll(page, "__TRACKS__", strconv.Itoa(c.Columns*2))
+	page = strings.ReplaceAll(page, "__THEME__", cfg.Theme)
+	page = strings.ReplaceAll(page, "__TRACKS__", strconv.Itoa(columns*2))
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
@@ -187,40 +206,60 @@ func (s *Server) adminPage(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write([]byte(page))
 }
 
-func (s *Server) auth(next http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		// Behind ingress the request is already authenticated by Home Assistant,
-		// so the panel and its API work without a device token.
-		if s.ingress {
-			next(w, r)
-			return
-		}
-		tok := r.Header.Get("X-Dash-Token")
-		if tok == "" {
-			tok = r.URL.Query().Get("t")
-		}
-		want := s.cfg.Get().DeviceToken
-		if subtle.ConstantTimeCompare([]byte(tok), []byte(want)) != 1 {
-			http.Error(w, "unauthorized", http.StatusUnauthorized)
-			return
-		}
-		next(w, r)
-	}
+type clientConfig struct {
+	Title       string          `json:"title"`
+	Theme       string          `json:"theme"`
+	ThemeMode   string          `json:"theme_mode,omitempty"`
+	Columns     int             `json:"columns"`
+	Device      string          `json:"device"`
+	Orientation string          `json:"orientation"`
+	Widgets     []config.Widget `json:"widgets"`
 }
 
-func (s *Server) adminJSON(next http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodPut || r.Method == http.MethodPost {
-			if ct := r.Header.Get("Content-Type"); !strings.HasPrefix(ct, "application/json") {
-				http.Error(w, "expected application/json", http.StatusUnsupportedMediaType)
-				return
-			}
-		}
-		next(w, r)
+func (s *Server) config(w http.ResponseWriter, r *http.Request) {
+	d, ok := s.dashboardFor(r)
+	if !ok {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
 	}
+	cfg := s.cfg.Get()
+	writeJSON(w, http.StatusOK, clientConfig{
+		Title:       cfg.Title,
+		Theme:       cfg.Theme,
+		ThemeMode:   cfg.ThemeMode,
+		Columns:     d.Columns,
+		Device:      d.Device,
+		Orientation: d.Orientation,
+		Widgets:     d.Widgets,
+	})
+}
+
+func (s *Server) state(w http.ResponseWriter, r *http.Request) {
+	d, ok := s.dashboardFor(r)
+	if !ok {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+	out := make(map[string]ha.State)
+	for _, wd := range d.Widgets {
+		if wd.Entity == "" {
+			continue
+		}
+		if st, found := s.ha.State(wd.Entity); found {
+			out[wd.Entity] = st
+		}
+	}
+	writeJSON(w, http.StatusOK, out)
 }
 
 func (s *Server) events(w http.ResponseWriter, r *http.Request) {
+	d, ok := s.dashboardFor(r)
+	if !ok {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+	dashID := d.ID
+
 	flusher, ok := w.(http.Flusher)
 	if !ok {
 		http.Error(w, "streaming unsupported", http.StatusInternalServerError)
@@ -250,7 +289,11 @@ func (s *Server) events(w http.ResponseWriter, r *http.Request) {
 			if !open {
 				return
 			}
-			if !s.watched(st.EntityID) {
+			cur, found := s.cfg.DashboardByID(dashID)
+			if !found {
+				return
+			}
+			if !watched(cur, st.EntityID) {
 				continue
 			}
 			writeSSE(w, flusher, map[string]any{
@@ -270,6 +313,15 @@ func (s *Server) events(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func watched(d config.Dashboard, entityID string) bool {
+	for _, wd := range d.Widgets {
+		if wd.Entity == entityID {
+			return true
+		}
+	}
+	return false
+}
+
 func writeSSE(w http.ResponseWriter, f http.Flusher, v any) {
 	b, err := json.Marshal(v)
 	if err != nil {
@@ -277,15 +329,6 @@ func writeSSE(w http.ResponseWriter, f http.Flusher, v any) {
 	}
 	fmt.Fprintf(w, "data: %s\n\n", b)
 	f.Flush()
-}
-
-func (s *Server) watched(entityID string) bool {
-	for _, wd := range s.cfg.Get().Widgets {
-		if wd.Entity == entityID {
-			return true
-		}
-	}
-	return false
 }
 
 var allowedServices = map[string]bool{
@@ -300,6 +343,10 @@ var allowedServices = map[string]bool{
 }
 
 func (s *Server) action(w http.ResponseWriter, r *http.Request) {
+	if _, ok := s.dashboardFor(r); !ok {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
 	var req struct {
 		EntityID string         `json:"entity_id"`
 		Service  string         `json:"service"`
@@ -366,9 +413,14 @@ func validEntity(id string) bool {
 }
 
 func (s *Server) feed(w http.ResponseWriter, r *http.Request) {
+	d, ok := s.dashboardFor(r)
+	if !ok {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
 	id := r.URL.Query().Get("id")
 	var widget *config.Widget
-	for _, wd := range s.cfg.Get().Widgets {
+	for _, wd := range d.Widgets {
 		if wd.ID == id && wd.Type == "rss" {
 			w := wd
 			widget = &w
@@ -392,36 +444,9 @@ func (s *Server) feed(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"items": items})
 }
 
-var hostRe = regexp.MustCompile(`^[A-Za-z0-9.\-]+$`)
-
-func (s *Server) qr(w http.ResponseWriter, r *http.Request) {
-	host := strings.TrimSpace(r.URL.Query().Get("host"))
-	host = strings.TrimPrefix(host, "http://")
-	host = strings.TrimPrefix(host, "https://")
-	if i := strings.IndexByte(host, '/'); i >= 0 {
-		host = host[:i]
-	}
-	if i := strings.IndexByte(host, ':'); i >= 0 {
-		host = host[:i]
-	}
-	if host == "" || !hostRe.MatchString(host) {
-		host = "homeassistant.local"
-	}
-
-	link := "http://" + host + ":8088/?t=" + s.cfg.Get().DeviceToken
-	png, err := qrcode.Encode(link, qrcode.Medium, 360)
-	if err != nil {
-		http.Error(w, "qr failed", http.StatusInternalServerError)
-		return
-	}
-	w.Header().Set("Content-Type", "image/png")
-	w.Header().Set("Cache-Control", "no-store")
-	_, _ = w.Write(png)
-}
-
 func (s *Server) saveConfig(w http.ResponseWriter, r *http.Request) {
 	var in config.Config
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&in); err != nil {
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 2<<20)).Decode(&in); err != nil {
 		http.Error(w, "bad json", http.StatusBadRequest)
 		return
 	}
@@ -439,12 +464,71 @@ func (s *Server) saveConfig(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) regenToken(w http.ResponseWriter, r *http.Request) {
-	tok, err := s.cfg.RegenerateToken()
+	id := r.URL.Query().Get("dashboard")
+	if id == "" {
+		_ = r.ParseForm()
+		id = r.FormValue("dashboard")
+	}
+	if id == "" {
+		cfg := s.cfg.Get()
+		if len(cfg.Dashboards) > 0 {
+			id = cfg.Dashboards[0].ID
+		}
+	}
+	if id == "" {
+		http.Error(w, "no dashboard", http.StatusBadRequest)
+		return
+	}
+	tok, err := s.cfg.RegenerateToken(id)
 	if err != nil {
 		http.Error(w, "failed", http.StatusInternalServerError)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]string{"token": tok})
+	writeJSON(w, http.StatusOK, map[string]string{"token": tok, "dashboard": id})
+}
+
+var hostRe = regexp.MustCompile(`^[A-Za-z0-9.\-]+$`)
+
+func (s *Server) qr(w http.ResponseWriter, r *http.Request) {
+	id := r.URL.Query().Get("dashboard")
+	var d config.Dashboard
+	var ok bool
+	if id != "" {
+		d, ok = s.cfg.DashboardByID(id)
+	} else {
+		cfg := s.cfg.Get()
+		if len(cfg.Dashboards) > 0 {
+			d = cfg.Dashboards[0]
+			ok = true
+		}
+	}
+	if !ok || d.DeviceToken == "" {
+		http.NotFound(w, r)
+		return
+	}
+
+	host := strings.TrimSpace(r.URL.Query().Get("host"))
+	host = strings.TrimPrefix(host, "http://")
+	host = strings.TrimPrefix(host, "https://")
+	if i := strings.IndexByte(host, '/'); i >= 0 {
+		host = host[:i]
+	}
+	if i := strings.IndexByte(host, ':'); i >= 0 {
+		host = host[:i]
+	}
+	if host == "" || !hostRe.MatchString(host) {
+		host = "homeassistant.local"
+	}
+
+	link := "http://" + host + ":8088/?t=" + d.DeviceToken
+	png, err := qrcode.Encode(link, qrcode.Medium, 360)
+	if err != nil {
+		http.Error(w, "qr failed", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "image/png")
+	w.Header().Set("Cache-Control", "no-store")
+	_, _ = w.Write(png)
 }
 
 func (s *Server) entityList(w http.ResponseWriter, r *http.Request) {
@@ -466,8 +550,25 @@ func (s *Server) entityList(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, out)
 }
 
+func (s *Server) adminJSON(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPut || r.Method == http.MethodPost {
+			if ct := r.Header.Get("Content-Type"); !strings.HasPrefix(ct, "application/json") {
+				http.Error(w, "expected application/json", http.StatusUnsupportedMediaType)
+				return
+			}
+		}
+		next(w, r)
+	}
+}
+
 func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(v)
+}
+
+// readBodyLimit is used by image proxying.
+func readBodyLimit(r io.Reader, n int64) ([]byte, error) {
+	return io.ReadAll(io.LimitReader(r, n))
 }
