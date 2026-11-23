@@ -344,7 +344,7 @@
     }
 
     if (w.type === 'sensor') {
-      valueEl.textContent = v + unit;
+      valueEl.textContent = cleanNumber(v, st.attributes) + unit;
       node.classList.remove('active');
       if (subEl) {
         subEl.textContent = '';
@@ -609,6 +609,38 @@
     }
     tick();
     setInterval(tick, 15000);
+  }
+
+  function cleanNumber(value, attrs) {
+    var s = String(value == null ? '' : value).trim();
+    if (!s || s === 'unknown' || s === 'unavailable') {
+      return s;
+    }
+    var n = Number(s);
+    if (!isFinite(n)) {
+      return s;
+    }
+    var p = null;
+    if (attrs) {
+      if (attrs.suggested_display_precision != null) {
+        p = Number(attrs.suggested_display_precision);
+      } else if (attrs.accuracy_decimals != null) {
+        p = Number(attrs.accuracy_decimals);
+      } else if (attrs.display_precision != null) {
+        p = Number(attrs.display_precision);
+      }
+    }
+    if (p != null && isFinite(p)) {
+      p = Math.max(0, Math.min(6, Math.round(p)));
+      return n.toFixed(p);
+    }
+    // ESPHome/HA often stores float32 as 2.0999999046325. HA frontend hides
+    // this with display precision, but the state string keeps the tail.
+    var out = n.toFixed(6).replace(/\.?0+$/, '');
+    if (out === '-0') {
+      out = '0';
+    }
+    return out;
   }
 
   function shortDate(s) {
