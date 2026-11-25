@@ -562,15 +562,38 @@
     if (!img) {
       return;
     }
-    var interval = Math.max(2, w.interval || 3) * 1000;
+    var interval = Math.max(1, w.interval || 3) * 1000;
+    var busy = false;
 
     function refresh() {
-      if (document.hidden) {
+      if (document.hidden || busy) {
         return;
       }
+      busy = true;
+      var done = false;
+      var timer = setTimeout(function () {
+        if (!done) {
+          done = true;
+          busy = false;
+        }
+      }, 5000);
       var loader = new Image();
       loader.onload = function () {
+        if (done) {
+          return;
+        }
+        done = true;
+        clearTimeout(timer);
         img.src = loader.src;
+        busy = false;
+      };
+      loader.onerror = function () {
+        if (done) {
+          return;
+        }
+        done = true;
+        clearTimeout(timer);
+        busy = false;
       };
       loader.src =
         'api/camera?id=' +

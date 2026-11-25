@@ -1106,7 +1106,7 @@
     if (!w) {
       return;
     }
-    w.interval = clamp(parseInt(this.value, 10) || 3, 2, 30);
+    w.interval = clamp(parseInt(this.value, 10) || 3, 1, 30);
     this.value = w.interval;
     markDirty();
     rerenderCanvas();

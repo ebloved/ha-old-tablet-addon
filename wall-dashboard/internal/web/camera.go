@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -35,13 +36,20 @@ func (s *Server) camera(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "camera not found", http.StatusNotFound)
 		return
 	}
-	if interval < 2 {
+	if interval < 1 {
 		interval = 3
 	}
 	if interval > 30 {
 		interval = 30
 	}
 	ttl := time.Duration(interval) * time.Second
+	if interval <= 1 {
+		// A 1s client interval would otherwise hit a 1s cache almost every
+		// time and effectively halve the frame rate.
+		ttl = 0
+	} else {
+		ttl -= 200 * time.Millisecond
+	}
 
 	key := d.ID + "/" + id
 	if id == "" {
@@ -50,6 +58,19 @@ func (s *Server) camera(w http.ResponseWriter, r *http.Request) {
 
 	s.camMu.Lock()
 	cached, hasCache := s.cam[key]
+	s.camMu.Unlock()
+	if hasCache && time.Since(cached.at) < ttl {
+		writeImage(w, cached)
+		return
+	}
+
+	lock := s.cameraLock(key)
+	lock.Lock()
+	defer lock.Unlock()
+
+	// Another request may have refreshed the frame while we waited.
+	s.camMu.Lock()
+	cached, hasCache = s.cam[key]
 	s.camMu.Unlock()
 	if hasCache && time.Since(cached.at) < ttl {
 		writeImage(w, cached)
@@ -84,4 +105,15 @@ func writeImage(w http.ResponseWriter, c cachedCamera) {
 	w.Header().Set("Content-Type", c.ct)
 	w.Header().Set("Cache-Control", "no-store")
 	_, _ = w.Write(c.data)
+}
+
+func (s *Server) cameraLock(key string) *sync.Mutex {
+	s.camMu.Lock()
+	defer s.camMu.Unlock()
+	m := s.camLocks[key]
+	if m == nil {
+		m = &sync.Mutex{}
+		s.camLocks[key] = m
+	}
+	return m
 }

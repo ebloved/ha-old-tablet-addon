@@ -52,8 +52,9 @@ type Server struct {
 	ingress bool
 	httpc   *http.Client
 
-	camMu sync.Mutex
-	cam   map[string]cachedCamera
+	camMu    sync.Mutex
+	cam      map[string]cachedCamera
+	camLocks map[string]*sync.Mutex
 
 	imgMu sync.Mutex
 	img   map[string]cachedImage
@@ -61,14 +62,15 @@ type Server struct {
 
 func New(cfg *config.Store, hac *ha.Client, rc *rss.Cache, log *slog.Logger, ingress bool) *Server {
 	return &Server{
-		cfg:     cfg,
-		ha:      hac,
-		rss:     rc,
-		log:     log,
-		ingress: ingress,
-		httpc:   &http.Client{Timeout: 20 * time.Second},
-		cam:     make(map[string]cachedCamera),
-		img:     make(map[string]cachedImage),
+		cfg:      cfg,
+		ha:       hac,
+		rss:      rc,
+		log:      log,
+		ingress:  ingress,
+		httpc:    &http.Client{Timeout: 20 * time.Second},
+		cam:      make(map[string]cachedCamera),
+		camLocks: make(map[string]*sync.Mutex),
+		img:      make(map[string]cachedImage),
 	}
 }
 

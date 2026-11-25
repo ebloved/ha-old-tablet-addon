@@ -404,7 +404,7 @@ func sanitizeWidgets(widgets []Widget, columns int) []Widget {
 			if w.Entity != "" && (!entityRe.MatchString(w.Entity) || !strings.HasPrefix(w.Entity, "camera.")) {
 				continue
 			}
-			if w.Interval < 2 {
+			if w.Interval < 1 {
 				w.Interval = 3
 			}
 			if w.Interval > 30 {
